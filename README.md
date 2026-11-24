@@ -40,6 +40,20 @@ The repository started with the Assignment 1 report. Implementation will be
 delivered in verified vertical slices. Each meaningful change must update the
 engineering journal and its corresponding tests or evidence.
 
+## Development
+
+The backend requires Python 3.12 or later and
+[uv](https://docs.astral.sh/uv/). Run the fast checks with:
+
+```powershell
+uv sync --all-groups
+uv run pytest
+```
+
+PostgreSQL, RabbitMQ/MQTT, DynamoDB Local, and MinIO are defined in
+`compose.yaml`. See the [local development runbook](docs/runbooks/local-development.md)
+for setup, service endpoints, validation, and reset instructions.
+
 ## License
 
 This project is available under the [MIT License](LICENSE).

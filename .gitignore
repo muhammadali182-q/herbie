@@ -1,0 +1,44 @@
+# Environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+coverage.xml
+htmlcov/
+.coverage
+
+# Node
+node_modules/
+web/dist/
+*.tsbuildinfo
+
+# Infrastructure and cloud state
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+.aws/
+
+# Local service data and evidence
+.data/
+artifacts/raw/
+*.log
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

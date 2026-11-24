@@ -108,3 +108,56 @@ original PDF is retained unchanged; corrections are additive and traceable.
   deployment.
 - Detailed D2-D4 rubrics were not supplied, so traceability uses the project
   brief and CLO mapping as the authority.
+
+## 2026-11-24 - Reproducible backend and service foundation
+
+- Branch or commit: `feat/mvp-foundation`
+- Requirements: QR-007, QR-008, QR-011
+- Related ADRs: ADR-0001, ADR-0002, ADR-0003
+
+### Summary
+
+Added a typed Python platform package with independent API and worker entry
+points, structured JSON logging, safe local settings, health contracts, local
+service definitions, tests, and a clean-development runbook.
+
+### Rationale
+
+The domain will need independent HTTP and asynchronous processing capacity,
+but both process roles should share one package and configuration contract.
+Local PostgreSQL, RabbitMQ, DynamoDB, and S3-compatible services preserve the
+target data and messaging boundaries without spending AWS credits during daily
+development.
+
+### Implementation
+
+- `pyproject.toml` defines Python 3.12 compatibility, runtime dependencies,
+  strict type/lint settings, scripts, and a 90% branch-coverage gate.
+- The FastAPI factory exposes liveness, readiness, and versioned metadata.
+- The worker has a signal-aware process lifecycle ready for message consumers.
+- Docker Compose defines PostgreSQL, RabbitMQ with MQTT and Prometheus plugins,
+  DynamoDB Local, MinIO, and optional application processes.
+- Environment examples contain only documented local-development values.
+- Git attributes, ignore rules, and a non-root backend image improve
+  reproducibility and secret hygiene.
+
+### Verification
+
+The foundation is verified locally with `uv lock`, Python compilation, pytest
+with branch coverage, Markdown linting, documentation link checks, and YAML
+parsing. Ruff and mypy are locked for CI, but their large wheels could not be
+downloaded through this workstation's package-host connection. Docker
+configuration is reviewed statically because Docker is unavailable here.
+
+### Impact
+
+No cloud resource is created. The Compose broker remains single-node and is not
+availability evidence. Readiness is intentionally static until real dependency
+adapters exist, preventing a misleading partial check.
+
+### Limitations and Follow-up
+
+- Execute the Compose integration on Docker-enabled CI or a team machine.
+- Complete the ADR-0002 broker spike when MQTT consumers are implemented.
+- Add dependency-aware readiness only when all required adapters can be
+  checked consistently.

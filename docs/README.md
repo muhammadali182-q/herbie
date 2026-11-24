@@ -20,6 +20,7 @@ deliverable.
 - [Semester plan](roadmap/semester-plan.md)
 - [Risk register](roadmap/risk-register.md)
 - [Engineering journal](ENGINEERING_JOURNAL.md)
+- [Local development runbook](runbooks/local-development.md)
 
 ## Deliverables
 
