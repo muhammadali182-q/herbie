@@ -42,12 +42,17 @@ events rather than modifying each other's tables directly.
 | Store | Authoritative data | Prototype retention |
 |---|---|---|
 | PostgreSQL | Tenants, fleet, policies, sessions, commands, tariffs, charges, invoices, audit | Long-lived according to lifecycle policy |
-| DynamoDB | Recent immutable telemetry and latest charger state | 7 to 14 days with TTL |
-| S3 | Compressed, batched raw event archive and exports | 90 days for the project model |
+| DynamoDB | Recent immutable telemetry, per-connector latest state, archive outbox, and compact replay tombstones | Events: 7 to 14 days; replay markers: at least 180 days |
+| S3 | Compressed, batched canonical validated-event archive and exports | 90 days for the project model |
 
 The system assumes at-least-once delivery. Stable message and command IDs,
 conditional writes, monotonic checkpoints, and reconciliation make duplicates
 safe. There is no distributed transaction across the three stores.
+
+An accepted telemetry write atomically creates both the immutable hot event and
+an archive-pending record. A separate worker creates deterministic tenant/hour
+objects, then records the object key and checksum. Failed object writes remain
+visible for retry and reconciliation.
 
 ## Deployment Profiles
 

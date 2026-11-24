@@ -11,7 +11,7 @@ the final report. `P0` requirements are mandatory for the semester MVP.
 | FR-002 | P0 | Manage tenant-specific sites, chargers, tariffs, power limits, maintenance windows, and alert thresholds | Three tenants hold different configurations and changes apply without application redeployment |
 | FR-003 | P0 | Authorize and manage charging sessions | Valid sessions follow the defined state machine; invalid and duplicate transitions are rejected or idempotent |
 | FR-004 | P0 | Share site power safely between active sessions | No generated target or acknowledged allocation set exceeds the configured site limit |
-| FR-005 | P0 | Record telemetry and calculate session energy | Duplicate or out-of-order readings do not increase energy or create additional records |
+| FR-005 | P0 | Record telemetry and calculate session energy | Retries create no duplicate immutable record; stale readings may be audited but never move the metering checkpoint or increase billed energy |
 | FR-006 | P0 | Apply tenant tariffs and calculate session charges | Golden fixtures match exact integer-unit energy and currency totals |
 | FR-007 | P0 | Meter platform usage and create tenant invoices | Re-running invoice generation for the same period produces one identical invoice |
 | FR-008 | P0 | Present operator workflows in a web dashboard | An operator can inspect its sites, chargers, active sessions, allocation, usage, and invoices without seeing another tenant |

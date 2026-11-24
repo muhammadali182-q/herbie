@@ -38,7 +38,7 @@ herbie-worker = "herbie.worker:run"
 packages = ["backend/src/herbie", "simulator/src/herbie_simulator"]
 
 [tool.pytest.ini_options]
-addopts = "--strict-config --strict-markers --cov=herbie --cov-report=term-missing"
+addopts = "--strict-config --strict-markers --cov=herbie --cov=herbie_simulator --cov-report=term-missing"
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
 pythonpath = ["backend/src", "simulator/src"]

@@ -1,44 +1,58 @@
-"""Telemetry ingestion and idempotency tests."""
+"""Telemetry ingestion, ordering, concurrency, and tenancy tests."""
 
+import asyncio
 from dataclasses import FrozenInstanceError
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
 
 from herbie.telemetry.contracts import ChargerStatus, MessageType, TelemetryEvent, TelemetryPayload
-from herbie.telemetry.errors import MessageIdentityConflictError, TopicIdentityMismatchError
-from herbie.telemetry.memory import InMemoryTelemetryArchive, InMemoryTelemetryRepository
+from herbie.telemetry.errors import (
+    MessageIdentityConflictError,
+    SequenceIdentityConflictError,
+    TelemetryClockSkewError,
+    TopicIdentityMismatchError,
+)
+from herbie.telemetry.memory import InMemoryTelemetryRepository
 from herbie.telemetry.repository import StoredTelemetry
 from herbie.telemetry.service import TelemetryIngestionService
-from herbie.telemetry.topic import TelemetryTopic
+from herbie.telemetry.topic import DeviceIdentity, TelemetryTopic
 
 TENANT_A = UUID("11111111-1111-1111-1111-111111111111")
 TENANT_B = UUID("22222222-2222-2222-2222-222222222222")
 CHARGER_A = UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+BOOT_A = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
+BOOT_B = UUID("cccccccc-cccc-cccc-cccc-cccccccccccc")
+SERVER_TIME = datetime(2026, 1, 1, 0, 1, tzinfo=UTC)
 
 
 def event(
     *,
     tenant_id: UUID = TENANT_A,
     charger_id: UUID = CHARGER_A,
+    connector_id: int = 1,
     message_id: UUID | None = None,
+    boot_id: UUID = BOOT_A,
+    boot_started_at: datetime | None = None,
     sequence: int = 1,
     occurred_at: datetime | None = None,
     power_w: int = 7_200,
 ) -> TelemetryEvent:
-    timestamp = occurred_at or datetime(2026, 1, 1, tzinfo=UTC)
+    started = boot_started_at or datetime(2026, 1, 1, tzinfo=UTC)
+    timestamp = occurred_at or started + timedelta(seconds=sequence * 10)
     return TelemetryEvent(
         schema_version="1.0",
         message_id=message_id or uuid4(),
         message_type=MessageType.TELEMETRY_REPORTED,
         occurred_at=timestamp,
         sent_at=timestamp,
-        boot_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+        boot_id=boot_id,
+        boot_started_at=started,
         sequence=sequence,
         tenant_id=tenant_id,
         charger_id=charger_id,
-        connector_id=1,
+        connector_id=connector_id,
         payload=TelemetryPayload(
             cumulative_energy_wh=100 + sequence,
             power_w=power_w,
@@ -47,127 +61,170 @@ def event(
     )
 
 
-def service() -> tuple[
-    TelemetryIngestionService,
-    InMemoryTelemetryRepository,
-    InMemoryTelemetryArchive,
-]:
+def identity(telemetry: TelemetryEvent) -> DeviceIdentity:
+    return DeviceIdentity(telemetry.tenant_id, telemetry.charger_id)
+
+
+def topic(telemetry: TelemetryEvent) -> str:
+    return TelemetryTopic.for_device(telemetry.tenant_id, telemetry.charger_id)
+
+
+def service() -> tuple[TelemetryIngestionService, InMemoryTelemetryRepository]:
     repository = InMemoryTelemetryRepository()
-    archive = InMemoryTelemetryArchive()
-    received_at = datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC)
-    return (
-        TelemetryIngestionService(repository, archive, lambda: received_at),
-        repository,
-        archive,
-    )
+    return TelemetryIngestionService(repository, lambda: SERVER_TIME), repository
+
+
+async def ingest(service: TelemetryIngestionService, telemetry: TelemetryEvent):  # type: ignore[no-untyped-def]
+    return await service.ingest(identity(telemetry), topic(telemetry), telemetry.canonical_json())
 
 
 @pytest.mark.asyncio
-async def test_ingestion_accepts_and_archives_new_event() -> None:
-    ingestion, repository, archive = service()
+async def test_ingestion_accepts_new_event_and_creates_archive_outbox() -> None:
+    ingestion, repository = service()
     telemetry = event()
-    topic = TelemetryTopic.for_device(telemetry.tenant_id, telemetry.charger_id)
 
-    result = await ingestion.ingest(topic, telemetry.canonical_json())
+    result = await ingest(ingestion, telemetry)
 
     assert result.accepted is True
     assert result.duplicate is False
     assert result.latest_updated is True
-    assert await repository.latest_for_charger(TENANT_A, CHARGER_A) == result.telemetry
-    assert await archive.items_for_tenant(TENANT_A) == (result.telemetry,)
+    assert await repository.latest_for_connector(TENANT_A, CHARGER_A, 1) == result.telemetry
+    assert await repository.list_archive_pending(10) == [result.telemetry]
 
 
 @pytest.mark.asyncio
-async def test_duplicate_is_not_archived_or_applied_twice() -> None:
-    ingestion, _, archive = service()
+async def test_duplicate_does_not_create_another_event_or_outbox_record() -> None:
+    ingestion, repository = service()
     telemetry = event()
-    topic = TelemetryTopic.for_device(telemetry.tenant_id, telemetry.charger_id)
 
-    first = await ingestion.ingest(topic, telemetry.canonical_json())
-    duplicate = await ingestion.ingest(topic, telemetry.canonical_json())
+    first, duplicate = await asyncio.gather(
+        ingest(ingestion, telemetry),
+        ingest(ingestion, telemetry),
+    )
 
-    assert first.accepted is True
-    assert duplicate.accepted is False
-    assert duplicate.duplicate is True
-    assert await archive.items_for_tenant(TENANT_A) == (first.telemetry,)
-
-
-@pytest.mark.asyncio
-async def test_retry_repairs_archive_after_hot_store_succeeds() -> None:
-    repository = InMemoryTelemetryRepository()
-    archive = InMemoryTelemetryArchive()
-    attempts = 0
-
-    class FailsOnceArchive:
-        async def append(self, telemetry: StoredTelemetry) -> None:
-            nonlocal attempts
-            attempts += 1
-            if attempts == 1:
-                raise RuntimeError("synthetic archive outage")
-            await archive.append(telemetry)
-
-    ingestion = TelemetryIngestionService(repository, FailsOnceArchive())
-    telemetry = event()
-    topic = TelemetryTopic.for_device(telemetry.tenant_id, telemetry.charger_id)
-
-    with pytest.raises(RuntimeError, match="archive outage"):
-        await ingestion.ingest(topic, telemetry.canonical_json())
-
-    repaired = await ingestion.ingest(topic, telemetry.canonical_json())
-
-    assert repaired.duplicate is True
-    assert attempts == 2
-    assert len(await archive.items_for_tenant(TENANT_A)) == 1
+    assert sum(result.accepted for result in (first, duplicate)) == 1
+    assert sum(result.duplicate for result in (first, duplicate)) == 1
+    assert len(await repository.list_archive_pending(10)) == 1
 
 
 @pytest.mark.asyncio
 async def test_message_id_reuse_with_other_content_is_rejected() -> None:
-    ingestion, _, _ = service()
+    ingestion, _ = service()
     message_id = uuid4()
     original = event(message_id=message_id, power_w=7_200)
     conflict = event(message_id=message_id, power_w=22_000)
-    topic = TelemetryTopic.for_device(original.tenant_id, original.charger_id)
 
-    await ingestion.ingest(topic, original.canonical_json())
+    await ingest(ingestion, original)
 
     with pytest.raises(MessageIdentityConflictError):
-        await ingestion.ingest(topic, conflict.canonical_json())
+        await ingest(ingestion, conflict)
 
 
 @pytest.mark.asyncio
-async def test_payload_cannot_forge_topic_identity() -> None:
-    ingestion, _, _ = service()
+async def test_boot_sequence_reuse_with_other_message_id_is_rejected() -> None:
+    ingestion, _ = service()
+    original = event(sequence=3)
+    conflict = event(sequence=3)
+
+    await ingest(ingestion, original)
+
+    with pytest.raises(SequenceIdentityConflictError):
+        await ingest(ingestion, conflict)
+
+
+@pytest.mark.asyncio
+async def test_authenticated_identity_topic_and_payload_must_all_match() -> None:
+    ingestion, _ = service()
     telemetry = event(tenant_id=TENANT_B)
     trusted_topic = TelemetryTopic.for_device(TENANT_A, telemetry.charger_id)
 
     with pytest.raises(TopicIdentityMismatchError):
-        await ingestion.ingest(trusted_topic, telemetry.canonical_json())
+        await ingestion.ingest(identity(telemetry), trusted_topic, telemetry.canonical_json())
+
+    with pytest.raises(TopicIdentityMismatchError):
+        await ingestion.ingest(
+            DeviceIdentity(TENANT_A, telemetry.charger_id),
+            topic(telemetry),
+            telemetry.canonical_json(),
+        )
 
 
 @pytest.mark.asyncio
-async def test_stale_event_is_retained_without_replacing_latest() -> None:
-    ingestion, repository, archive = service()
-    latest_event = event(sequence=2, occurred_at=datetime(2026, 1, 1, 0, 0, 20, tzinfo=UTC))
-    stale_event = event(sequence=1, occurred_at=datetime(2026, 1, 1, 0, 0, 10, tzinfo=UTC))
-    topic = TelemetryTopic.for_device(TENANT_A, CHARGER_A)
+async def test_sequence_orders_one_boot_even_if_device_clock_moves_backward() -> None:
+    ingestion, repository = service()
+    first = event(sequence=1, occurred_at=datetime(2026, 1, 1, 0, 0, 20, tzinfo=UTC))
+    second = event(sequence=2, occurred_at=datetime(2026, 1, 1, 0, 0, 15, tzinfo=UTC))
 
-    latest_result = await ingestion.ingest(topic, latest_event.canonical_json())
-    stale_result = await ingestion.ingest(topic, stale_event.canonical_json())
+    await ingest(ingestion, first)
+    latest = await ingest(ingestion, second)
 
-    assert stale_result.accepted is True
-    assert stale_result.latest_updated is False
-    assert await repository.latest_for_charger(TENANT_A, CHARGER_A) == latest_result.telemetry
-    assert len(await archive.items_for_tenant(TENANT_A)) == 2
+    assert latest.latest_updated is True
+    assert await repository.latest_for_connector(TENANT_A, CHARGER_A, 1) == latest.telemetry
+
+
+@pytest.mark.asyncio
+async def test_newer_boot_wins_and_delayed_old_boot_cannot_replace_it() -> None:
+    ingestion, repository = service()
+    old_boot = event(
+        boot_id=BOOT_A,
+        boot_started_at=datetime(2026, 1, 1, tzinfo=UTC),
+        sequence=100,
+        occurred_at=datetime(2026, 1, 1, 0, 0, 20, tzinfo=UTC),
+    )
+    new_boot = event(
+        boot_id=BOOT_B,
+        boot_started_at=datetime(2026, 1, 1, 0, 0, 30, tzinfo=UTC),
+        sequence=0,
+        occurred_at=datetime(2026, 1, 1, 0, 0, 30, tzinfo=UTC),
+    )
+    delayed_old = event(
+        boot_id=BOOT_A,
+        boot_started_at=datetime(2026, 1, 1, tzinfo=UTC),
+        sequence=101,
+        occurred_at=datetime(2026, 1, 1, 0, 0, 50, tzinfo=UTC),
+    )
+
+    await ingest(ingestion, old_boot)
+    new_result = await ingest(ingestion, new_boot)
+    delayed_result = await ingest(ingestion, delayed_old)
+
+    assert new_result.latest_updated is True
+    assert delayed_result.latest_updated is False
+    assert await repository.latest_for_connector(TENANT_A, CHARGER_A, 1) == new_result.telemetry
+
+
+@pytest.mark.asyncio
+async def test_future_device_clock_is_rejected_without_pinning_latest_state() -> None:
+    ingestion, repository = service()
+    future = event(
+        boot_started_at=SERVER_TIME + timedelta(minutes=6),
+        occurred_at=SERVER_TIME + timedelta(minutes=6),
+    )
+
+    with pytest.raises(TelemetryClockSkewError):
+        await ingest(ingestion, future)
+
+    assert await repository.latest_for_connector(TENANT_A, CHARGER_A, 1) is None
+
+
+@pytest.mark.asyncio
+async def test_connectors_keep_independent_latest_state() -> None:
+    ingestion, repository = service()
+    connector_one = event(connector_id=1, sequence=1)
+    connector_two = event(connector_id=2, sequence=9)
+
+    one = await ingest(ingestion, connector_one)
+    two = await ingest(ingestion, connector_two)
+
+    assert await repository.latest_for_connector(TENANT_A, CHARGER_A, 1) == one.telemetry
+    assert await repository.latest_for_connector(TENANT_A, CHARGER_A, 2) == two.telemetry
 
 
 @pytest.mark.asyncio
 async def test_latest_listing_never_crosses_tenant_boundary() -> None:
-    repository = InMemoryTelemetryRepository()
-    received = datetime(2026, 1, 1, tzinfo=UTC)
-    event_a = event(tenant_id=TENANT_A)
-    event_b = event(tenant_id=TENANT_B)
-    await repository.store(StoredTelemetry(event=event_a, received_at=received))
-    await repository.store(StoredTelemetry(event=event_b, received_at=received))
+    ingestion, repository = service()
+    await ingest(ingestion, event(tenant_id=TENANT_A))
+    await ingest(ingestion, event(tenant_id=TENANT_B))
 
     tenant_a_items = await repository.list_latest_for_tenant(TENANT_A)
 
@@ -175,22 +232,23 @@ async def test_latest_listing_never_crosses_tenant_boundary() -> None:
 
 
 @pytest.mark.asyncio
-async def test_same_message_id_is_scoped_to_its_device() -> None:
+async def test_server_clock_must_be_timezone_aware() -> None:
     repository = InMemoryTelemetryRepository()
-    received = datetime(2026, 1, 1, tzinfo=UTC)
-    message_id = uuid4()
-    first = event(message_id=message_id)
-    second = event(message_id=message_id, charger_id=uuid4())
+    ingestion = TelemetryIngestionService(repository, lambda: datetime(2026, 1, 1))
+    telemetry = event()
 
-    first_write = await repository.store(StoredTelemetry(first, received))
-    second_write = await repository.store(StoredTelemetry(second, received))
-
-    assert first_write.created is True
-    assert second_write.created is True
+    with pytest.raises(ValueError, match="server clock"):
+        await ingest(ingestion, telemetry)
 
 
 def test_stored_telemetry_is_immutable() -> None:
-    stored = StoredTelemetry(event=event(), received_at=datetime(2026, 1, 1, tzinfo=UTC))
+    telemetry = event()
+    stored = StoredTelemetry(
+        event=telemetry,
+        topic=topic(telemetry),
+        received_at=SERVER_TIME,
+        fingerprint=telemetry.semantic_fingerprint(),
+    )
 
     with pytest.raises(FrozenInstanceError):
         stored.received_at = datetime(2027, 1, 1, tzinfo=UTC)  # type: ignore[misc]

@@ -332,10 +332,9 @@ locks or pinned revisions are stale.
 
 ### Summary
 
-Added the first functional domain slice: a strict v1 charger telemetry
-contract, trusted MQTT topic parsing, duplicate-safe ingestion, tenant-scoped
-latest-state behavior, append-only archive coordination, and a deterministic
-multi-tenant scenario generator.
+Added the first functional domain slice: a v1 charger telemetry contract, MQTT
+topic parsing, duplicate-safe ingestion, tenant-scoped latest-state behavior,
+an initial archive port, and a deterministic multi-tenant scenario generator.
 
 ### Rationale
 
@@ -355,7 +354,8 @@ results from depending on uncontrolled random inputs.
   duplicates; reused IDs with changed content are errors.
 - Older events remain accepted for audit/archive purposes but cannot replace a
   newer latest-state record.
-- Only newly created events reach the archive port.
+- The initial service called an idempotent archive port after hot persistence;
+  the independent review below replaces this with a durable archive outbox.
 - UUID5-based scenario generation produces stable three-tenant fixtures with
   monotonic per-device sequences and cumulative meter values.
 
@@ -380,3 +380,69 @@ an asynchronous lock so concurrent local requests exercise one-write behavior.
 - Add authenticated tenant-scoped query APIs before exposing latest state to
   the dashboard.
 - Extend the simulator with real MQTT connections and calibrated load modes.
+
+## 2026-11-24 - Telemetry invariant review and redesign
+
+- Branch or commit: `feat/telemetry-slice`
+- Requirements: FR-001, FR-005, QR-001, QR-005, QR-010
+- Related ADRs: ADR-0003, ADR-0004
+
+### Summary
+
+An independent review identified five high-severity integration blockers in the
+first telemetry core: ambiguous chronology, no durable archive-pending state,
+no explicit authenticated device identity input, simulator ID reuse across
+changed scenarios, and coercive wire validation. The core was redesigned before
+adding RabbitMQ or cloud storage.
+
+### Rationale
+
+Infrastructure adapters amplify domain mistakes. Ordering must not depend on
+random UUIDs or a device clock alone, and successful hot persistence cannot
+depend on the broker redelivering forever to repair S3. A topic selected by a
+publisher is also not proof of device identity. Correcting these boundaries now
+keeps later adapter failures observable and recoverable.
+
+### Implementation
+
+- Added a separate trusted `DeviceIdentity` input for broker-authenticated
+  tenant/charger identity.
+- Made wire numbers strict, UUID strings canonical, timestamps RFC 3339-only,
+  and all accepted times UTC-normalized with temporal and future-skew checks.
+- Added `boot_started_at`; sequence orders one boot and boot start orders reboots.
+- Enforced one message identity per boot sequence and connector-level latest
+  state without UUID tie-breaking.
+- Replaced direct archive calls with an atomically pending archive outbox.
+- Added deterministic canonical gzip NDJSON batching, content-derived object
+  keys, checksums, immutable sink semantics, receipts, retry, and reconciliation
+  state.
+- Included all content-shaping scenario parameters in run identity, interleaved
+  tenant generation, bounded scenario size, and corrected cumulative energy
+  truncation.
+- Extended coverage and Ruff CI to the simulator package.
+
+### Verification
+
+Tests now cover strict wire parsing, UTC normalization, timestamp order, future
+skew, concurrent duplicate delivery, message and sequence conflicts, clock
+rollback, reordered boots, independent connectors, tenant boundaries,
+deterministic archive bytes, failed-object retry, archive receipts, scenario ID
+separation, interleaving, bounds, and exact energy vectors. Ruff, strict mypy,
+coverage, and Markdown lint pass locally; hosted CI will be rerun after push.
+
+### Impact
+
+The MQTT adapter must supply identity established from a broker principal and
+cannot construct it from the payload. DynamoDB must transactionally preserve
+event, sequence owner, replay marker, latest condition, and archive-pending
+state. S3 is a canonical validated-event archive rather than exact wire-byte
+storage.
+
+### Limitations and Follow-up
+
+- Device credential provisioning and topic ACL enforcement remain broker work.
+- Durable adapter transactions and conformance tests remain mandatory.
+- Invalid payload quarantine needs an explicit size, retention, and redaction
+  policy.
+- The 180-day replay-marker target must be checked against final billing and
+  retention policy.

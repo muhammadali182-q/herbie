@@ -65,10 +65,10 @@ jobs:
         run: uv sync --frozen --all-groups
 
       - name: Lint
-        run: uv run ruff check backend
+        run: uv run ruff check backend simulator
 
       - name: Check formatting
-        run: uv run ruff format --check backend
+        run: uv run ruff format --check backend simulator
 
       - name: Type check
         run: uv run mypy

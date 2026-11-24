@@ -37,3 +37,11 @@ class TelemetryTopic:
     @classmethod
     def for_device(cls, tenant_id: UUID, charger_id: UUID) -> str:
         return f"herbie/v1/tenants/{tenant_id}/chargers/{charger_id}/up/telemetry"
+
+
+@dataclass(frozen=True, slots=True)
+class DeviceIdentity:
+    """Tenant/device identity established by the authenticated broker adapter."""
+
+    tenant_id: UUID
+    charger_id: UUID

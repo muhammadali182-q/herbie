@@ -4,6 +4,7 @@
 - Date: 2026-11-24
 - Deciders: H.E.R.B.I.E. project team
 - Requirements: FR-001, FR-005 through FR-007, QR-010, ER-001
+- Clarified by: ADR-0004
 
 ## Context
 

@@ -8,6 +8,9 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from herbie.telemetry.contracts import ChargerStatus, MessageType, TelemetryEvent, TelemetryPayload
 from herbie.telemetry.topic import TelemetryTopic
 
+SIMULATOR_SCHEMA_VERSION = "1.0"
+MAX_SCENARIO_EVENTS = 2_000_000
+
 
 @dataclass(frozen=True, slots=True)
 class Scenario:
@@ -28,10 +31,19 @@ class Scenario:
             "interval_seconds": self.interval_seconds,
         }
         for name, value in positive_fields.items():
-            if value < 1:
+            if type(value) is not int or value < 1:
                 raise ValueError(f"{name} must be at least one")
+        if type(self.seed) is not str or not self.seed.strip():
+            raise ValueError("seed must be a non-empty string")
         if self.starts_at.tzinfo is None or self.starts_at.utcoffset() is None:
             raise ValueError("starts_at must include a timezone offset")
+        total_events = self.tenants * self.chargers_per_tenant * self.rounds
+        if total_events > MAX_SCENARIO_EVENTS:
+            raise ValueError(f"scenario cannot exceed {MAX_SCENARIO_EVENTS} events")
+        try:
+            self.starts_at + timedelta(seconds=self.rounds * self.interval_seconds)
+        except OverflowError as error:
+            raise ValueError("scenario duration exceeds datetime range") from error
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,17 +57,28 @@ class SimulatedPublication:
 def generate_scenario(scenario: Scenario) -> Iterator[SimulatedPublication]:
     """Yield events in deterministic round-robin tenant/device order."""
 
-    scenario_namespace = uuid5(NAMESPACE_URL, f"herbie:{scenario.seed}")
+    run_descriptor = "|".join(
+        [
+            f"simulator={SIMULATOR_SCHEMA_VERSION}",
+            f"seed={scenario.seed}",
+            f"tenants={scenario.tenants}",
+            f"chargers={scenario.chargers_per_tenant}",
+            f"rounds={scenario.rounds}",
+            f"interval={scenario.interval_seconds}",
+            f"starts={scenario.starts_at.astimezone(UTC).isoformat()}",
+        ]
+    )
+    scenario_namespace = uuid5(NAMESPACE_URL, f"herbie:{run_descriptor}")
     devices = list(_devices(scenario, scenario_namespace))
 
     for round_index in range(scenario.rounds):
         occurred_at = scenario.starts_at + timedelta(
-            seconds=round_index * scenario.interval_seconds
+            seconds=(round_index + 1) * scenario.interval_seconds
         )
         for tenant_index, charger_index, tenant_id, charger_id, boot_id in devices:
             power_w = 7_000 + ((tenant_index * 1_307 + charger_index * 911) % 15_000)
-            energy_increment_wh = power_w * scenario.interval_seconds // 3_600
-            cumulative_energy_wh = (round_index + 1) * energy_increment_wh
+            elapsed_seconds = (round_index + 1) * scenario.interval_seconds
+            cumulative_energy_wh = power_w * elapsed_seconds // 3_600
             message_id = uuid5(boot_id, f"telemetry:{round_index}")
             event = TelemetryEvent(
                 schema_version="1.0",
@@ -64,6 +87,7 @@ def generate_scenario(scenario: Scenario) -> Iterator[SimulatedPublication]:
                 occurred_at=occurred_at,
                 sent_at=occurred_at + timedelta(milliseconds=25 + charger_index),
                 boot_id=boot_id,
+                boot_started_at=scenario.starts_at,
                 sequence=round_index,
                 tenant_id=tenant_id,
                 charger_id=charger_id,
@@ -86,9 +110,9 @@ def _devices(
     scenario: Scenario,
     namespace: UUID,
 ) -> Iterator[tuple[int, int, UUID, UUID, UUID]]:
-    for tenant_index in range(scenario.tenants):
-        tenant_id = uuid5(namespace, f"tenant:{tenant_index}")
-        for charger_index in range(scenario.chargers_per_tenant):
+    for charger_index in range(scenario.chargers_per_tenant):
+        for tenant_index in range(scenario.tenants):
+            tenant_id = uuid5(namespace, f"tenant:{tenant_index}")
             charger_id = uuid5(tenant_id, f"charger:{charger_index}")
             boot_id = uuid5(charger_id, "boot:0")
             yield tenant_index, charger_index, tenant_id, charger_id, boot_id

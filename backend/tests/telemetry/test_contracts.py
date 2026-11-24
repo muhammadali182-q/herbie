@@ -1,5 +1,6 @@
-"""Versioned telemetry contract tests."""
+"""Versioned telemetry wire-contract tests."""
 
+import json
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
@@ -16,9 +17,10 @@ def valid_event(**overrides: object) -> TelemetryEvent:
         "schema_version": "1.0",
         "message_id": uuid4(),
         "message_type": MessageType.TELEMETRY_REPORTED,
-        "occurred_at": datetime(2026, 1, 1, tzinfo=UTC),
-        "sent_at": datetime(2026, 1, 1, tzinfo=UTC),
+        "occurred_at": datetime(2026, 1, 1, 0, 0, 10, tzinfo=UTC),
+        "sent_at": datetime(2026, 1, 1, 0, 0, 11, tzinfo=UTC),
         "boot_id": uuid4(),
+        "boot_started_at": datetime(2026, 1, 1, tzinfo=UTC),
         "sequence": 1,
         "tenant_id": uuid4(),
         "charger_id": uuid4(),
@@ -33,25 +35,82 @@ def valid_event(**overrides: object) -> TelemetryEvent:
     return TelemetryEvent.model_validate(values)
 
 
-def test_contract_round_trips_canonical_json() -> None:
+def test_contract_round_trips_stable_canonical_json_and_fingerprint() -> None:
     event = valid_event()
 
     restored = TelemetryEvent.from_json(event.canonical_json())
 
     assert restored == event
+    assert restored.canonical_json() == event.canonical_json()
+    assert restored.semantic_fingerprint() == event.semantic_fingerprint()
+    assert len(event.semantic_fingerprint()) == 64
 
 
-@pytest.mark.parametrize("field", ["occurred_at", "sent_at"])
+@pytest.mark.parametrize("field", ["occurred_at", "sent_at", "boot_started_at"])
 def test_contract_rejects_naive_timestamps(field: str) -> None:
     with pytest.raises(ValidationError, match="timezone offset"):
         valid_event(**{field: datetime(2026, 1, 1)})
 
 
-def test_payload_rejects_negative_measurements() -> None:
+def test_wire_contract_rejects_numeric_timestamp() -> None:
+    wire = json.loads(valid_event().canonical_json())
+    wire["occurred_at"] = 1_767_225_600
+
+    with pytest.raises(ValidationError, match="RFC 3339 text"):
+        TelemetryEvent.from_json(json.dumps(wire))
+
+
+@pytest.mark.parametrize("bad_value", [True, "7200", 7200.0])
+def test_wire_contract_rejects_coerced_integer_measurements(bad_value: object) -> None:
+    wire = json.loads(valid_event().canonical_json())
+    wire["payload"]["power_w"] = bad_value
+
+    with pytest.raises(ValidationError):
+        TelemetryEvent.from_json(json.dumps(wire))
+
+
+def test_wire_contract_rejects_noncanonical_uuid() -> None:
+    wire = json.loads(valid_event().canonical_json())
+    wire["message_id"] = wire["message_id"].upper()
+
+    with pytest.raises(ValidationError, match="canonical lowercase"):
+        TelemetryEvent.from_json(json.dumps(wire))
+
+
+def test_timestamps_are_normalized_to_utc() -> None:
+    event = valid_event(
+        boot_started_at="2026-01-01T05:00:00+05:00",
+        occurred_at="2026-01-01T05:00:10+05:00",
+        sent_at="2026-01-01T05:00:11+05:00",
+    )
+
+    assert event.boot_started_at == datetime(2026, 1, 1, tzinfo=UTC)
+    assert event.occurred_at == datetime(2026, 1, 1, 0, 0, 10, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {
+            "boot_started_at": datetime(2026, 1, 1, 0, 0, 20, tzinfo=UTC),
+            "occurred_at": datetime(2026, 1, 1, 0, 0, 10, tzinfo=UTC),
+        },
+        {
+            "occurred_at": datetime(2026, 1, 1, 0, 0, 10, tzinfo=UTC),
+            "sent_at": datetime(2026, 1, 1, 0, 0, 9, tzinfo=UTC),
+        },
+    ],
+)
+def test_contract_rejects_impossible_temporal_order(overrides: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        valid_event(**overrides)
+
+
+def test_payload_rejects_negative_or_implausible_measurements() -> None:
     with pytest.raises(ValidationError):
         TelemetryPayload(
             cumulative_energy_wh=-1,
-            power_w=1,
+            power_w=1_000_001,
             status=ChargerStatus.CHARGING,
         )
 
