@@ -31,21 +31,22 @@ dev = [
 
 [project.scripts]
 herbie-api = "herbie.main:run"
+herbie-simulator = "herbie_simulator.cli:run"
 herbie-worker = "herbie.worker:run"
 
 [tool.hatch.build.targets.wheel]
-packages = ["backend/src/herbie"]
+packages = ["backend/src/herbie", "simulator/src/herbie_simulator"]
 
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers --cov=herbie --cov-report=term-missing"
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
-pythonpath = ["backend/src"]
-testpaths = ["backend/tests"]
+pythonpath = ["backend/src", "simulator/src"]
+testpaths = ["backend/tests", "simulator/tests"]
 
 [tool.coverage.run]
 branch = true
-source = ["herbie"]
+source = ["herbie", "herbie_simulator"]
 
 [tool.coverage.report]
 fail_under = 90
@@ -55,7 +56,7 @@ skip_covered = true
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["backend/src", "backend/tests"]
+src = ["backend/src", "backend/tests", "simulator/src", "simulator/tests"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF"]
@@ -68,7 +69,7 @@ line-ending = "lf"
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["backend/src", "backend/tests"]
+files = ["backend/src", "backend/tests", "simulator/src", "simulator/tests"]
 plugins = ["pydantic.mypy"]
 
 [tool.pydantic-mypy]

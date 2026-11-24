@@ -14,6 +14,7 @@ deliverable.
 
 - [Architecture overview](architecture/overview.md)
 - [Architecture decisions](adr/README.md)
+- [Charger message contract](interfaces/charger-message-contract.md)
 
 ## Delivery
 

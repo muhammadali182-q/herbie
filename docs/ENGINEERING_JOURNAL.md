@@ -323,3 +323,60 @@ locks or pinned revisions are stale.
 - Dynamic Compose startup remains pending on a Docker-enabled runner.
 - Browser-level accessibility and responsive checks remain part of dashboard
   integration.
+
+## 2026-11-24 - Versioned telemetry core and deterministic simulator
+
+- Branch or commit: `feat/telemetry-slice`
+- Requirements: FR-001, FR-005, QR-001
+- Related ADRs: ADR-0001, ADR-0002, ADR-0003
+
+### Summary
+
+Added the first functional domain slice: a strict v1 charger telemetry
+contract, trusted MQTT topic parsing, duplicate-safe ingestion, tenant-scoped
+latest-state behavior, append-only archive coordination, and a deterministic
+multi-tenant scenario generator.
+
+### Rationale
+
+Message identity, ordering, and idempotency must be correct before coupling the
+system to a broker or cloud database. Pure ports and in-memory adapters allow
+those semantics to be tested exhaustively and reused by later RabbitMQ,
+DynamoDB, and S3 adapters. A deterministic simulator prevents demo and load
+results from depending on uncontrolled random inputs.
+
+### Implementation
+
+- Pydantic contracts reject unknown fields, naive timestamps, negative
+  measurements, unsupported schema versions, and invalid connector numbers.
+- Topic parsing derives trusted tenant/charger identity and rejects envelope
+  identity forgery.
+- Event keys are scoped by tenant, charger, and message ID. Exact retries are
+  duplicates; reused IDs with changed content are errors.
+- Older events remain accepted for audit/archive purposes but cannot replace a
+  newer latest-state record.
+- Only newly created events reach the archive port.
+- UUID5-based scenario generation produces stable three-tenant fixtures with
+  monotonic per-device sequences and cumulative meter values.
+
+### Verification
+
+Contract, topic, duplicate, collision, stale-order, tenant-scope, immutability,
+simulator determinism, CLI, Ruff, mypy, and coverage tests pass. The contract
+document explicitly separates logical charger representation from concurrent
+connection evidence.
+
+### Impact
+
+No broker, database, API, or cloud behavior is claimed by this commit. The
+ports define what those adapters must preserve. The in-memory repository uses
+an asynchronous lock so concurrent local requests exercise one-write behavior.
+
+### Limitations and Follow-up
+
+- Add generated JSON Schema and compatibility checks before external producers
+  consume the contract.
+- Implement RabbitMQ routing/redelivery and durable telemetry/archive adapters.
+- Add authenticated tenant-scoped query APIs before exposing latest state to
+  the dashboard.
+- Extend the simulator with real MQTT connections and calibrated load modes.

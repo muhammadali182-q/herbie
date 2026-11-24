@@ -16,6 +16,7 @@ RUN groupadd --system --gid 10001 herbie \
 COPY --from=uv /uv /uvx /bin/
 COPY pyproject.toml uv.lock README.md LICENSE ./
 COPY backend ./backend
+COPY simulator ./simulator
 
 RUN uv sync --locked --no-dev
 
