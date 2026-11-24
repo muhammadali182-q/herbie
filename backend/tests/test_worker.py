@@ -22,7 +22,7 @@ async def test_worker_installs_signal_handlers_for_process_mode(
 ) -> None:
     stop_event = asyncio.Event()
     stop_event.set()
-    monkeypatch.setattr(worker.asyncio, "Event", lambda: stop_event)
+    monkeypatch.setattr(asyncio, "Event", lambda: stop_event)
 
     await asyncio.wait_for(serve(), timeout=1)
 

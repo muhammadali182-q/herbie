@@ -1,10 +1,11 @@
 """API foundation tests."""
 
 import pytest
+import uvicorn
 from fastapi.testclient import TestClient
 
-from herbie.config import Settings
 from herbie import main
+from herbie.config import Settings
 from herbie.main import create_app
 
 
@@ -57,7 +58,7 @@ def test_console_runner_uses_typed_settings(monkeypatch: pytest.MonkeyPatch) -> 
 
     settings = Settings(api_host="0.0.0.0", api_port=9123, _env_file=None)
     monkeypatch.setattr(main, "get_settings", lambda: settings)
-    monkeypatch.setattr(main.uvicorn, "run", fake_run)
+    monkeypatch.setattr(uvicorn, "run", fake_run)
 
     main.run()
 

@@ -2,6 +2,7 @@
 
 import asyncio
 import signal
+from contextlib import suppress
 
 import structlog
 
@@ -26,11 +27,8 @@ async def serve(stop_event: asyncio.Event | None = None) -> None:
 
     if stop_event is None:
         for shutdown_signal in (signal.SIGINT, signal.SIGTERM):
-            try:
+            with suppress(NotImplementedError):
                 loop.add_signal_handler(shutdown_signal, stopped.set)
-            except NotImplementedError:
-                # Windows uses KeyboardInterrupt in local development.
-                pass
 
     logger.info(
         "worker_started",
@@ -44,10 +42,8 @@ async def serve(stop_event: asyncio.Event | None = None) -> None:
 def run() -> None:
     """Run the worker process."""
 
-    try:
+    with suppress(KeyboardInterrupt):
         asyncio.run(serve())
-    except KeyboardInterrupt:
-        pass
 
 
 if __name__ == "__main__":  # pragma: no cover - module execution guard

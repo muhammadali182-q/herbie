@@ -212,3 +212,57 @@ numbers from being reused as performance or availability evidence.
 - Add automated accessibility checks during dashboard integration.
 - The Nginx security policy will be tightened after the required API origins
   and asset behavior are known.
+
+## 2026-11-24 - Automated quality and repository security gates
+
+- Branch or commit: `feat/mvp-foundation`
+- Requirements: QR-008, QR-011
+- Related ADRs: ADR-0001
+
+### Summary
+
+Added pull-request quality automation for documentation, backend, frontend,
+container definitions, production dependency auditing, and secret scanning.
+Added dependency-update policy, a security reporting policy, and a review
+template for tenant, data, operations, and cost impact.
+
+### Rationale
+
+The project will change quickly under a short deadline. Automated gates prevent
+speed from silently weakening tests, tenant controls, documentation, or secret
+hygiene. Separate jobs make failures attributable and allow independent work to
+proceed without combining unrelated checks.
+
+### Implementation
+
+- Python CI installs the committed uv lock, runs Ruff, formatting, strict mypy,
+  and the coverage-gated test suite on Python 3.12.
+- Frontend CI installs the npm lock, then lints, tests, builds, and audits
+  runtime dependencies.
+- Container CI validates the Compose model and builds both runtime images.
+- Gitleaks scans complete Git history with read-only repository permission.
+- Dependabot monitors Python, npm, GitHub Actions, and both Dockerfiles weekly.
+
+### Verification
+
+Workflow YAML is parsed locally. Backend tests, frontend lint/tests/build,
+Markdown lint, Compose YAML parsing, and the runtime npm audit pass locally.
+Ruff 0.17.6 and strict mypy 1.20.2 also pass locally after obtaining their
+artifacts through source/release fallbacks. The first GitHub-hosted workflow run
+will validate Linux, Docker, and action integration that this workstation
+cannot execute completely.
+
+### Impact
+
+The workflow has `contents: read` permission and grants no cloud credentials.
+Deployment remains a separate future workflow requiring an explicit protected
+environment and short-lived AWS identity.
+
+### Limitations and Follow-up
+
+- Replace action version tags with immutable commit SHAs before a production
+  release.
+- Add schema compatibility, database integration, and infrastructure security
+  jobs when those artifacts exist.
+- Review the first hosted run and correct environment-specific failures before
+  marking the foundation gate complete.
