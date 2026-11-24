@@ -11,6 +11,20 @@ from herbie.config import get_settings
 from herbie.logging import configure_logging
 
 
+def install_signal_handlers(
+    loop: asyncio.AbstractEventLoop,
+    stopped: asyncio.Event,
+) -> int:
+    """Install supported process shutdown handlers and return their count."""
+
+    installed = 0
+    for shutdown_signal in (signal.SIGINT, signal.SIGTERM):
+        with suppress(NotImplementedError):
+            loop.add_signal_handler(shutdown_signal, stopped.set)
+            installed += 1
+    return installed
+
+
 async def serve(stop_event: asyncio.Event | None = None) -> None:
     """Run until the process receives a shutdown signal.
 
@@ -26,9 +40,7 @@ async def serve(stop_event: asyncio.Event | None = None) -> None:
     loop = asyncio.get_running_loop()
 
     if stop_event is None:
-        for shutdown_signal in (signal.SIGINT, signal.SIGTERM):
-            with suppress(NotImplementedError):
-                loop.add_signal_handler(shutdown_signal, stopped.set)
+        install_signal_handlers(loop, stopped)
 
     logger.info(
         "worker_started",

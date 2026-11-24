@@ -8,7 +8,7 @@ import structlog
 def configure_logging(level: str) -> None:
     """Configure stdlib and structlog JSON output."""
 
-    logging.basicConfig(format="%(message)s", level=level.upper())
+    logging.basicConfig(format="%(message)s", level=level.upper(), force=True)
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,

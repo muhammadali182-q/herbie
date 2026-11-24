@@ -31,7 +31,13 @@ function App() {
 
         <nav aria-label="Primary navigation">
           {navigation.map((item, index) => (
-            <button className={index === 0 ? "nav-item active" : "nav-item"} key={item}>
+            <button
+              aria-current={index === 0 ? "page" : undefined}
+              className={index === 0 ? "nav-item active" : "nav-item"}
+              disabled={index !== 0}
+              key={item}
+              type="button"
+            >
               <span>{String(index + 1).padStart(2, "0")}</span>
               {item}
             </button>
@@ -55,9 +61,12 @@ function App() {
           </div>
           <div className="topbar-actions">
             <span className="seed-badge">Synthetic snapshot</span>
-            <button className="outline-button" type="button">
+            <a
+              className="outline-button"
+              href="https://github.com/muhammadali182-q/herbie/blob/main/docs/product/traceability.md"
+            >
               View evidence
-            </button>
+            </a>
           </div>
         </header>
 
@@ -87,13 +96,21 @@ function App() {
               </div>
             </div>
 
-            <div className="bar-chart" aria-label="Synthetic twelve-hour load chart">
+            <div
+              aria-describedby="load-chart-values"
+              className="bar-chart"
+              role="img"
+              aria-label="Synthetic twelve-hour load chart"
+            >
               {hourlyLoad.map((height, index) => (
                 <div className="bar-slot" key={`${height}-${index}`}>
                   <span style={{ height: `${height}%` }} />
                 </div>
               ))}
             </div>
+            <p className="sr-only" id="load-chart-values">
+              Hourly relative load values: {hourlyLoad.join(", ")} percent.
+            </p>
             <div className="chart-scale">
               <span>08:00</span>
               <span>14:00</span>
@@ -136,7 +153,7 @@ function App() {
               <p className="eyebrow">Power allocation</p>
               <h2>Sites nearest limit</h2>
             </div>
-            <button className="text-button" type="button">Open all sites</button>
+            <button className="text-button" disabled type="button">Open all sites</button>
           </div>
 
           <div className="site-list">

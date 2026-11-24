@@ -266,3 +266,60 @@ environment and short-lived AWS identity.
   jobs when those artifacts exist.
 - Review the first hosted run and correct environment-specific failures before
   marking the foundation gate complete.
+
+## 2026-11-24 - Foundation review and hardening
+
+- Branch or commit: `feat/mvp-foundation`
+- Requirements: QR-007, QR-008, QR-011
+- Related ADRs: ADR-0001, ADR-0002, ADR-0003
+
+### Summary
+
+An independent code review found no critical or high-severity issue. The
+medium-severity configuration, reproducibility, and accessibility findings were
+fixed before beginning domain implementation.
+
+### Rationale
+
+Local-only credentials are safe only when services are also local-only. A
+generic API image health check cannot apply to a non-HTTP worker. Reproducible
+locks and action revisions must be enforced rather than merely documented.
+Interface accessibility claims also require measured contrast and semantic
+state, not visual appearance alone.
+
+### Implementation
+
+- Bound all local service ports to loopback and aligned local S3 credentials.
+- Disabled the inherited API health check for the worker process.
+- Excluded environment files, caches, coverage, and build output from Docker
+  contexts.
+- Enforced lock freshness, pinned action revisions and uv, and pinned available
+  container manifest digests.
+- Made settings immutable, corrected CORS/runtime configuration behavior, and
+  made signal registration directly testable.
+- Increased text contrast, added a two-color focus indicator, exposed chart
+  values to assistive technology, marked the active page, and disabled
+  unavailable controls.
+- Added an actionable private vulnerability-reporting channel.
+
+### Verification
+
+Ruff, strict mypy, backend tests, frontend lint/tests/build, Markdown lint,
+runtime npm audit, workflow parsing, and Compose parsing pass after this
+change. The GitHub-hosted quality jobs will be rerun after push. The test suite
+directly asserts immutable settings and signal-handler registration.
+
+### Impact
+
+Local services are no longer reachable from other hosts by default. The worker
+will no longer be permanently marked unhealthy. Docker builds receive a
+smaller, safer context. Dependency and workflow changes now fail when their
+locks or pinned revisions are stale.
+
+### Limitations and Follow-up
+
+- The MinIO image remains pinned by release tag because a public manifest
+  digest was not available through the inspected registry endpoint.
+- Dynamic Compose startup remains pending on a Docker-enabled runner.
+- Browser-level accessibility and responsive checks remain part of dashboard
+  integration.

@@ -85,6 +85,8 @@ docker compose --profile app down --volumes --remove-orphans
 
 ## Success Check
 
-The foundation is healthy when all backend checks pass, the Compose services
-report healthy on a Docker-enabled machine, and `/api/v1/meta` identifies the
-expected version and protocol.
+The foundation is healthy when all backend checks pass; PostgreSQL, RabbitMQ,
+and the API report healthy on a Docker-enabled machine; DynamoDB and MinIO
+respond at their listed loopback endpoints; and `/api/v1/meta` identifies the
+expected version and protocol. The worker intentionally disables the API image
+health check because it does not expose HTTP.

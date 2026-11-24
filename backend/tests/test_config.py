@@ -1,6 +1,7 @@
 """Configuration contract tests."""
 
 import pytest
+from pydantic import ValidationError
 
 from herbie.config import Settings
 
@@ -22,3 +23,10 @@ def test_environment_values_override_defaults(monkeypatch: pytest.MonkeyPatch) -
 
     assert settings.environment == "test"
     assert settings.api_port == 8123
+
+
+def test_settings_are_immutable() -> None:
+    settings = Settings(_env_file=None)
+
+    with pytest.raises(ValidationError):
+        setattr(settings, "api_port", 9000)  # noqa: B010 - exercise frozen runtime behavior

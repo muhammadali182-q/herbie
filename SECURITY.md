@@ -8,8 +8,9 @@ the active implementation branch and included in the next tagged release.
 ## Reporting a Vulnerability
 
 Do not open a public issue containing an exploitable vulnerability, credential,
-private key, personal data, or unredacted cloud identifier. Contact the project
-team privately and include:
+private key, personal data, or unredacted cloud identifier. Use GitHub's
+[private vulnerability report](https://github.com/muhammadali182-q/herbie/security/advisories/new)
+and include:
 
 - Affected commit or release.
 - Preconditions and reproduction steps.

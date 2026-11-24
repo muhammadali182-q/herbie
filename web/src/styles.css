@@ -12,7 +12,7 @@
   --orange: #f15a29;
   --teal: #18a995;
   --sand: #d3a84f;
-  --muted: #697476;
+  --muted: #4f5d5f;
 }
 
 * {
@@ -30,9 +30,23 @@ button {
   font: inherit;
 }
 
-button:focus-visible {
-  outline: 3px solid var(--sand);
-  outline-offset: 3px;
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px #8d3d1e;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .console-shell {
@@ -123,7 +137,7 @@ nav {
 }
 
 .nav-item span {
-  color: #637173;
+  color: #8b999b;
   font: 0.68rem/1 "Cascadia Mono", monospace;
 }
 
@@ -132,6 +146,11 @@ nav {
   border-left-color: var(--orange);
   color: #fff;
   background: #1b282a;
+}
+
+.nav-item:disabled {
+  cursor: not-allowed;
+  opacity: 0.76;
 }
 
 .sidebar-foot {
@@ -217,6 +236,7 @@ h2 {
 .text-button {
   border: 0;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .outline-button {
@@ -229,6 +249,11 @@ h2 {
 .outline-button:hover {
   color: var(--paper);
   background: var(--ink);
+}
+
+.text-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .grid-summary {
