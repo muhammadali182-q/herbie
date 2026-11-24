@@ -53,6 +53,27 @@ Local service endpoints:
 | MinIO API | `http://localhost:9000` |
 | MinIO console | `http://localhost:9001` |
 
+## Operator Dashboard
+
+Install and run the frontend outside Docker with:
+
+```powershell
+npm install
+npm run dev:web
+```
+
+The dashboard is available at `http://127.0.0.1:5173`. Until live API wiring is
+implemented, every operational value on the screen is visibly identified as
+synthetic seed data.
+
+Run its checks with:
+
+```powershell
+npm run lint:web
+npm run test:web
+npm run build:web
+```
+
 ## Reset
 
 The following removes local service data. Never run it against a shared or

@@ -161,3 +161,54 @@ adapters exist, preventing a misleading partial check.
 - Complete the ADR-0002 broker spike when MQTT consumers are implemented.
 - Add dependency-aware readiness only when all required adapters can be
   checked consistently.
+
+## 2026-11-24 - Operator console foundation
+
+- Branch or commit: `feat/mvp-foundation`
+- Requirements: FR-008, QR-007
+- Related ADRs: ADR-0001
+
+### Summary
+
+Added the responsive React operator-console shell, frontend lint/test/build
+tooling, and an Nginx runtime image. The interface presents fleet, session,
+load, tenant-lane, and site-allocation concepts needed by the final demo.
+
+### Rationale
+
+The course demonstration benefits from a visual operational surface, but UI
+scope must not compete with tenant isolation and allocation correctness. A
+single focused console establishes the visual language and information
+hierarchy before API wiring, while driver behavior remains in the simulator.
+
+### Implementation
+
+- The monorepo uses npm workspaces with Node.js 22 as the supported baseline.
+- The console uses semantic HTML, responsive layouts, high-contrast industrial
+  styling, and reduced-motion support without external font dependencies.
+- Every displayed metric is visibly marked as deterministic synthetic data.
+- Frontend tests assert both the claim labeling and operator navigation.
+- The production frontend image serves static assets through a hardened Nginx
+  configuration and supports client-side routes.
+
+### Verification
+
+The frontend is verified with ESLint, Vitest, TypeScript, and a production Vite
+build. Its Compose definition is parsed with the rest of the service topology.
+`npm audit --omit=dev` reports zero production vulnerabilities. The complete
+audit reports four low-severity findings in the Markdown lint toolchain; no
+moderate, high, or critical findings are present.
+
+### Impact
+
+The dashboard currently has no authentication or live data and therefore does
+not demonstrate tenant isolation. The explicit synthetic labels prevent sample
+numbers from being reused as performance or availability evidence.
+
+### Limitations and Follow-up
+
+- Replace seed values with tenant-scoped API queries after authentication and
+  contracts are implemented.
+- Add automated accessibility checks during dashboard integration.
+- The Nginx security policy will be tightened after the required API origins
+  and asset behavior are known.

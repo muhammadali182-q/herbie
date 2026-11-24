@@ -1,0 +1,22 @@
+{
+  "name": "herbie",
+  "version": "0.1.0",
+  "private": true,
+  "description": "H.E.R.B.I.E. multi-tenant EV charging management platform",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "web"
+  ],
+  "scripts": {
+    "build:web": "npm run build --workspace @herbie/web",
+    "dev:web": "npm run dev --workspace @herbie/web",
+    "lint:docs": "markdownlint-cli2 \"**/*.md\"",
+    "lint:web": "npm run lint --workspace @herbie/web",
+    "test:web": "npm run test --workspace @herbie/web"
+  },
+  "devDependencies": {
+    "markdownlint-cli2": "0.24.2"
+  }
+}

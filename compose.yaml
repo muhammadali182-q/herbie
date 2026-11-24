@@ -104,6 +104,18 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  web:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres-data:
   rabbitmq-data:
