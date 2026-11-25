@@ -105,7 +105,12 @@ async def run_archive_worker(settings: Settings, stopped: asyncio.Event) -> None
             settings.telemetry_event_retention_days,
             settings.telemetry_replay_retention_days,
         )
-        sink = S3TelemetryArchiveSink(s3, settings.s3_bucket, settings.s3_kms_key_id)
+        sink = S3TelemetryArchiveSink(
+            s3,
+            settings.s3_bucket,
+            settings.s3_kms_key_id,
+            encrypt=not settings.s3_allow_unencrypted_objects,
+        )
         archive = TelemetryArchiveService(repository, sink)
         await _run_archive_loop(archive, settings, stopped)
     finally:

@@ -732,7 +732,7 @@ are checked independently rather than inferring durable ingestion from PUBACK.
 ### Local Verification Boundary
 
 Docker remains unavailable on the Windows workstation. Local checks therefore
-collected 141 passing tests, one intentionally skipped system test, and 92.81%
+collected 143 passing tests, one intentionally skipped system test, and 92.88%
 branch coverage; Ruff, formatting, and strict mypy over 37 source files pass.
 The real-service result is pending the hosted `MQTT system` job and is not yet
 recorded as passing.
@@ -767,3 +767,10 @@ telemetry worker remained healthy; the preceding DynamoDB assertion passed.
 Worker subprocess output was previously buffered, so the harness now streams
 role logs to CI and checks bucket bootstrap separately from object flushing.
 This failed run is diagnostic evidence only, not an archive success claim.
+
+The streamed exception confirmed successful bucket bootstrap followed by
+MinIO rejecting the S3 server-side-encryption request because this local image
+has no KMS. Archive writes now retain encryption by default and expose a
+separate explicit local-emulator opt-out. KMS configuration and that opt-out are
+mutually exclusive. Moto continues to verify the default AES-256 request; the
+MinIO run is not evidence of encryption at rest.

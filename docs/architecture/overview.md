@@ -94,9 +94,10 @@ deduplicate during reconciliation.
 
 The loopback-only MinIO emulator does not implement AWS's
 `PutPublicAccessBlock` API. Its archive worker uses an explicit local-profile
-compatibility flag for that one unsupported call. The default remains
-fail-closed, and AWS/demo-cloud profiles must apply and verify all four public
-access block controls.
+compatibility flag for that one unsupported call. This unconfigured MinIO image
+also has no KMS and uses a separate explicit local-only encryption opt-out. Both
+defaults remain fail-closed. AWS/demo-cloud profiles must encrypt every object
+and apply and verify all four public access block controls.
 
 ## Security Boundaries
 

@@ -24,10 +24,15 @@ class S3TelemetryArchiveSink(TelemetryArchiveSink):
         client: S3Client,
         bucket: str,
         kms_key_id: str | None = None,
+        *,
+        encrypt: bool = True,
     ) -> None:
+        if kms_key_id and not encrypt:
+            raise ValueError("KMS encryption cannot be disabled")
         self._client = client
         self._bucket = bucket
         self._kms_key_id = kms_key_id
+        self._encrypt = encrypt
 
     async def put(self, batch: ArchiveBatch) -> None:
         await asyncio.to_thread(self._put, batch)
@@ -49,7 +54,7 @@ class S3TelemetryArchiveSink(TelemetryArchiveSink):
         if self._kms_key_id:
             request["ServerSideEncryption"] = "aws:kms"
             request["SSEKMSKeyId"] = self._kms_key_id
-        else:
+        elif self._encrypt:
             request["ServerSideEncryption"] = "AES256"
 
         last_conflict: ClientError | None = None

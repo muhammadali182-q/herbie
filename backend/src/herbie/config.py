@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     s3_bucket: str = "herbie-raw-local"
     s3_kms_key_id: str | None = None
     s3_allow_unsupported_public_access_block: bool = False
+    s3_allow_unencrypted_objects: bool = False
     archive_flush_interval_seconds: float = Field(default=5.0, gt=0, le=3_600)
     archive_batch_limit: int = Field(default=1_000, ge=1, le=10_000)
 
@@ -63,6 +64,8 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "registered devices must use '<tenant UUID>/<charger UUID>' entries"
                 )
+        if self.s3_kms_key_id and self.s3_allow_unencrypted_objects:
+            raise ValueError("an S3 KMS key cannot be combined with unencrypted objects")
         return self
 
 

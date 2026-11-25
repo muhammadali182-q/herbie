@@ -290,6 +290,21 @@ async def test_s3_sink_is_idempotent_and_rejects_key_conflict(
 
 
 @pytest.mark.asyncio
+async def test_s3_sink_requires_explicit_opt_out_for_unencrypted_emulator(
+    aws_clients: tuple[DynamoDBClient, S3Client],
+) -> None:
+    s3 = aws_clients[1]
+    batch = build_archive_batch([stored(event(message_id=UUID(int=50)))])
+
+    await S3TelemetryArchiveSink(s3, BUCKET_NAME, encrypt=False).put(batch)
+
+    response = s3.head_object(Bucket=BUCKET_NAME, Key=batch.object_key)
+    assert "ServerSideEncryption" not in response
+    with pytest.raises(ValueError, match="cannot be disabled"):
+        S3TelemetryArchiveSink(s3, BUCKET_NAME, "kms-key", encrypt=False)
+
+
+@pytest.mark.asyncio
 async def test_s3_sink_retries_conditional_request_conflict(
     aws_clients: tuple[DynamoDBClient, S3Client],
     monkeypatch: pytest.MonkeyPatch,

@@ -83,7 +83,8 @@ async def test_archive_runtime_bootstraps_both_stores_and_closes_clients(
     monkeypatch.setattr(runtime, "ensure_telemetry_table", ensure_table)
     monkeypatch.setattr(runtime, "ensure_archive_bucket", ensure_bucket)
     monkeypatch.setattr(runtime, "DynamoTelemetryRepository", MagicMock())
-    monkeypatch.setattr(runtime, "S3TelemetryArchiveSink", MagicMock())
+    sink_factory = MagicMock()
+    monkeypatch.setattr(runtime, "S3TelemetryArchiveSink", sink_factory)
     monkeypatch.setattr(runtime, "TelemetryArchiveService", MagicMock(return_value=archive))
     monkeypatch.setattr(runtime, "_run_archive_loop", run_loop)
 
@@ -97,6 +98,12 @@ async def test_archive_runtime_bootstraps_both_stores_and_closes_clients(
         False,
     )
     run_loop.assert_awaited_once_with(archive, settings, stopped)
+    sink_factory.assert_called_once_with(
+        s3,
+        settings.s3_bucket,
+        None,
+        encrypt=True,
+    )
     assert dynamodb.closed is True
     assert s3.closed is True
 

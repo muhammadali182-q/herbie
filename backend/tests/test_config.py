@@ -74,3 +74,12 @@ def test_worker_setting_bounds_are_enforced(
 
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+def test_kms_key_cannot_be_combined_with_unencrypted_archive() -> None:
+    with pytest.raises(ValidationError, match="KMS key"):
+        Settings(
+            s3_kms_key_id="test-key",
+            s3_allow_unencrypted_objects=True,
+            _env_file=None,
+        )

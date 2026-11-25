@@ -155,6 +155,7 @@ def worker_environment(
             "HERBIE_S3_REGION": "us-east-1",
             "HERBIE_S3_BUCKET": bucket,
             "HERBIE_S3_ALLOW_UNSUPPORTED_PUBLIC_ACCESS_BLOCK": "true",
+            "HERBIE_S3_ALLOW_UNENCRYPTED_OBJECTS": "true",
             "HERBIE_ARCHIVE_FLUSH_INTERVAL_SECONDS": "0.2",
             "HERBIE_ARCHIVE_BATCH_LIMIT": "100",
         }
