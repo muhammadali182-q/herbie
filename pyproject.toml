@@ -46,6 +46,9 @@ packages = ["backend/src/herbie", "simulator/src/herbie_simulator"]
 addopts = "--strict-config --strict-markers --cov=herbie --cov=herbie_simulator --cov-report=term-missing"
 asyncio_mode = "strict"
 asyncio_default_fixture_loop_scope = "function"
+markers = [
+  "system: requires the Docker Compose service stack",
+]
 pythonpath = ["backend/src", "simulator/src"]
 testpaths = ["backend/tests", "simulator/tests"]
 

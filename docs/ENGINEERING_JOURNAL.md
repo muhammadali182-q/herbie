@@ -700,3 +700,40 @@ Local Windows verification used Python 3.14.0 and uv 0.11.26:
 No real broker connection or load measurement was performed locally because
 Docker is unavailable. The implementation does not yet support a distributed
 generator, and no 2,000-connection or throughput claim is made by this commit.
+
+## 2026-11-25 - Compose-backed MQTT system evidence harness
+
+- Branch or commit: `feat/mqtt-ingestion`
+- Requirements: FR-001, FR-005, QR-005, QR-011
+- Related ADRs: ADR-0002, ADR-0004
+
+### Summary
+
+Added an opt-in system test and dedicated hosted-CI job using RabbitMQ's MQTT
+plugin, DynamoDB Local, and MinIO. The test provisions one device user at
+runtime with both ordinary resource permissions and exact `amq.topic`
+permissions. Credentials and resource names are limited to the disposable test
+environment.
+
+### Covered Procedure
+
+The harness starts a normal telemetry worker, publishes through the Paho
+simulator connection, verifies one durable event after a duplicate, starts the
+archive role, and checks one canonical gzip NDJSON membership in MinIO. It then
+proves that Device A cannot publish to Device B's topic or subscribe to Device
+B's command topic, verifies malformed input reaches the DLQ, and runs a helper
+worker that exits after DynamoDB commit but before ACK. A restarted normal
+worker must drain the redelivery without creating a second event.
+
+The test distinguishes MQTT PUBACK, queue delivery, DynamoDB acceptance, and
+S3-compatible archive evidence. RabbitMQ management counters and store contents
+are checked independently rather than inferring durable ingestion from PUBACK.
+
+### Local Verification Boundary
+
+Docker remains unavailable on the Windows workstation. Local checks therefore
+collected 140 passing tests and one intentionally skipped system test; Ruff,
+formatting, and strict mypy over 37 source files pass. The real-service result
+is pending the hosted `MQTT system` job and is not yet recorded as passing.
+ADR-0002 remains `Proposed` until that result and the remaining TLS/control-path
+criteria are evaluated.

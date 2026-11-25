@@ -69,6 +69,21 @@ unmeasured. Confirm DynamoDB and archive state separately before making an
 end-to-end claim. Use `--mqtt-tls --mqtt-ca-file <path>` for a TLS listener;
 add `--mqtt-cert-file` and `--mqtt-key-file` together for mutual TLS targets.
 
+Run the destructive, isolated MQTT system test only against the local Compose
+stack. It creates test users, queues, a DynamoDB table, and a MinIO bucket; the
+final command removes all Compose volumes:
+
+```powershell
+docker compose up -d rabbitmq dynamodb minio
+$env:HERBIE_RUN_SYSTEM_TESTS = "1"
+uv run pytest backend/tests/system -m system --no-cov -vv
+docker compose down --volumes --remove-orphans
+```
+
+The hosted `MQTT system` job runs the same procedure and prints service logs
+only after failure. Test credentials are local constants scoped to the
+short-lived Compose environment and are not cloud or personal credentials.
+
 Messaging topology:
 
 | Resource | Purpose |
