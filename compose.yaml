@@ -95,17 +95,49 @@ services:
       - path: .env
         required: false
     environment:
-      HERBIE_DATABASE_URL: ${HERBIE_DATABASE_URL:-postgresql+asyncpg://herbie:local_only@postgres:5432/herbie}
+      HERBIE_WORKER_ROLE: telemetry
       HERBIE_AMQP_URL: ${HERBIE_AMQP_URL:-amqp://herbie:local_only@rabbitmq:5672/%2F}
+      HERBIE_AMQP_PREFETCH: ${HERBIE_AMQP_PREFETCH:-100}
+      HERBIE_TELEMETRY_MAX_PAYLOAD_BYTES: ${HERBIE_TELEMETRY_MAX_PAYLOAD_BYTES:-65536}
+      HERBIE_TELEMETRY_MAX_FUTURE_SKEW_SECONDS: ${HERBIE_TELEMETRY_MAX_FUTURE_SKEW_SECONDS:-300}
+      HERBIE_TELEMETRY_RETRY_LIMIT: ${HERBIE_TELEMETRY_RETRY_LIMIT:-3}
+      HERBIE_TELEMETRY_RETRY_DELAY_MS: ${HERBIE_TELEMETRY_RETRY_DELAY_MS:-5000}
+      HERBIE_REGISTERED_DEVICES: ${HERBIE_REGISTERED_DEVICES:-[]}
       HERBIE_DYNAMODB_ENDPOINT: ${HERBIE_DYNAMODB_ENDPOINT:-http://dynamodb:8000}
-      HERBIE_S3_ENDPOINT: ${HERBIE_S3_ENDPOINT:-http://minio:9000}
       AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-herbie}
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-local_only_change_me}
     depends_on:
-      postgres:
-        condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      dynamodb:
+        condition: service_started
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+
+  archive-worker:
+    profiles: ["app"]
+    build:
+      context: .
+    command: ["python", "-m", "herbie.worker"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HERBIE_WORKER_ROLE: archive
+      HERBIE_DYNAMODB_ENDPOINT: ${HERBIE_DYNAMODB_ENDPOINT:-http://dynamodb:8000}
+      HERBIE_S3_ENDPOINT: ${HERBIE_S3_ENDPOINT:-http://minio:9000}
+      HERBIE_S3_REGION: ${HERBIE_S3_REGION:-us-east-1}
+      HERBIE_S3_BUCKET: ${HERBIE_S3_BUCKET:-herbie-raw-local}
+      HERBIE_ARCHIVE_FLUSH_INTERVAL_SECONDS: ${HERBIE_ARCHIVE_FLUSH_INTERVAL_SECONDS:-5}
+      HERBIE_ARCHIVE_BATCH_LIMIT: ${HERBIE_ARCHIVE_BATCH_LIMIT:-1000}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-herbie}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-local_only_change_me}
+    depends_on:
+      dynamodb:
+        condition: service_started
+      minio:
+        condition: service_started
     healthcheck:
       disable: true
     restart: unless-stopped

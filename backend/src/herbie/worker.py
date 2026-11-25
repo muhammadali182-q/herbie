@@ -9,6 +9,7 @@ import structlog
 from herbie import __version__
 from herbie.config import get_settings
 from herbie.logging import configure_logging
+from herbie.telemetry.runtime import run_archive_worker, run_telemetry_worker
 
 
 def install_signal_handlers(
@@ -26,12 +27,7 @@ def install_signal_handlers(
 
 
 async def serve(stop_event: asyncio.Event | None = None) -> None:
-    """Run until the process receives a shutdown signal.
-
-    Message consumers are attached in the telemetry vertical slice. Keeping a
-    real process lifecycle here makes container and signal behavior testable
-    before a broker adapter is introduced.
-    """
+    """Run the configured worker role until a shutdown signal is received."""
 
     settings = get_settings()
     configure_logging(settings.log_level)
@@ -45,10 +41,18 @@ async def serve(stop_event: asyncio.Event | None = None) -> None:
     logger.info(
         "worker_started",
         environment=settings.environment,
+        process_role=settings.worker_role,
         version=__version__,
     )
-    await stopped.wait()
-    logger.info("worker_stopped")
+    try:
+        if stopped.is_set():
+            return
+        if settings.worker_role == "archive":
+            await run_archive_worker(settings, stopped)
+        else:
+            await run_telemetry_worker(settings, stopped)
+    finally:
+        logger.info("worker_stopped", process_role=settings.worker_role)
 
 
 def run() -> None:

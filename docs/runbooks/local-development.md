@@ -40,6 +40,29 @@ docker compose up -d postgres rabbitmq dynamodb minio
 docker compose --profile app up --build
 ```
 
+The telemetry worker fails closed when `HERBIE_REGISTERED_DEVICES` is empty.
+For a local device, set it to a JSON list of canonical identities before
+starting the app profile:
+
+```text
+HERBIE_REGISTERED_DEVICES=["<tenant UUID>/<charger UUID>"]
+```
+
+The `worker` service consumes MQTT-derived telemetry and writes DynamoDB. The
+single `archive-worker` service drains archive-pending records to MinIO. Do not
+scale `archive-worker` beyond one instance until a durable batch-claim protocol
+exists.
+
+Messaging topology:
+
+| Resource | Purpose |
+|---|---|
+| `amq.topic` | MQTT/AMQP topic exchange supplied by RabbitMQ |
+| `herbie.telemetry.v1` | Durable classic telemetry work queue |
+| `herbie.control.v1` | Separate future control-response queue |
+| `herbie.telemetry.retry.v1` | Bounded delayed storage retry queue |
+| `herbie.telemetry.dead.v1` | Poison, security, clock, conflict, and exhausted-retry queue |
+
 Local service endpoints:
 
 | Service | Endpoint |
@@ -88,5 +111,6 @@ docker compose --profile app down --volumes --remove-orphans
 The foundation is healthy when all backend checks pass; PostgreSQL, RabbitMQ,
 and the API report healthy on a Docker-enabled machine; DynamoDB and MinIO
 respond at their listed loopback endpoints; and `/api/v1/meta` identifies the
-expected version and protocol. The worker intentionally disables the API image
-health check because it does not expose HTTP.
+expected version and protocol. Worker container health checks remain disabled
+because those roles do not expose HTTP; dependency-aware readiness is tracked
+as operations work rather than being inferred from process existence.

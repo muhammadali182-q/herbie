@@ -19,6 +19,13 @@ identity must agree. Topic equality alone is not authentication. Production
 provisioning must give each device exact publish/subscribe ACLs. The v1
 contract accepts only canonical lowercase UUID identifiers and an exact route.
 
+For the local demonstrator, RabbitMQ applies both ordinary resource permissions
+and topic permissions. MQTT `/` separators become AMQP `.` separators at the
+worker queue. Device topic permissions must be anchored to the exact translated
+upstream telemetry route and exact downstream command route. The worker may
+derive `DeviceIdentity` from that routing key only after this broker policy is
+enforced and the route is found in the configured fleet-registry boundary.
+
 ## Telemetry Envelope
 
 ```json
@@ -61,8 +68,12 @@ contract accepts only canonical lowercase UUID identifiers and an exact route.
   backward. Across boots, `boot_started_at` orders state. UUID lexical order is
   never used as chronology.
 - All timestamps must be RFC 3339 text with an explicit timezone and are
-  normalized to UTC. Numeric epoch timestamps and implausible future times are
-  rejected.
+  normalized to UTC. Numeric epoch timestamps and implausible future
+  `occurred_at`, `sent_at`, or `boot_started_at` values are rejected.
+- Worker payloads are limited to 65,536 bytes in the initial profile and are
+  rejected before JSON parsing. The broker's 131,072-byte authenticated packet
+  limit leaves room for MQTT topic and property overhead while remaining
+  bounded.
 - Energy and power use integer Wh and W. Currency never appears in telemetry.
 - Booleans, numeric strings, and floats are not coerced into integer fields.
 - Unknown fields are rejected to expose incompatible producers early.
@@ -86,6 +97,10 @@ Failure leaves pending state for retry; writing an object does not mutate it.
 The archive is at-least-once across process crashes: records retain stable
 message IDs for reconciliation and downstream deduplication. One archive
 scheduler is used until a durable cross-process batch-claim protocol is added.
+
+The telemetry queue ACK boundary is DynamoDB acceptance, not S3 completion.
+The singleton archive worker drains durable pending records independently, so
+an object-store outage does not require broker redelivery of accepted events.
 
 ## Deterministic Simulator
 

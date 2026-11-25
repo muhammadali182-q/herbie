@@ -29,5 +29,13 @@ class TelemetryClockSkewError(TelemetryError):
     """A device timestamp is implausibly ahead of server receipt time."""
 
 
+class UnregisteredDeviceError(TelemetryError):
+    """The broker-authorized route is not present in the fleet registry."""
+
+
+class TelemetryPayloadTooLargeError(TelemetryError):
+    """A telemetry payload exceeds the configured processing limit."""
+
+
 class ArchiveObjectConflictError(TelemetryError):
     """An immutable archive object key was reused with other content."""

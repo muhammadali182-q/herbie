@@ -1,12 +1,13 @@
 """Worker lifecycle tests."""
 
 import asyncio
-from typing import cast
+from typing import Literal, cast
 from unittest.mock import MagicMock
 
 import pytest
 
 from herbie import worker
+from herbie.config import Settings
 from herbie.worker import install_signal_handlers, serve
 
 
@@ -52,3 +53,39 @@ def test_worker_console_runner_completes(monkeypatch: pytest.MonkeyPatch) -> Non
     worker.run()
 
     assert called is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("role", "expected"),
+    [("telemetry", "telemetry"), ("archive", "archive")],
+)
+async def test_worker_dispatches_configured_role(
+    monkeypatch: pytest.MonkeyPatch,
+    role: Literal["telemetry", "archive"],
+    expected: str,
+) -> None:
+    called: list[str] = []
+    stopped = asyncio.Event()
+
+    async def fake_telemetry(settings: Settings, event: asyncio.Event) -> None:
+        assert settings.worker_role == role
+        assert event is stopped
+        called.append("telemetry")
+
+    async def fake_archive(settings: Settings, event: asyncio.Event) -> None:
+        assert settings.worker_role == role
+        assert event is stopped
+        called.append("archive")
+
+    monkeypatch.setattr(
+        worker,
+        "get_settings",
+        lambda: Settings(worker_role=role, _env_file=None),
+    )
+    monkeypatch.setattr(worker, "run_telemetry_worker", fake_telemetry)
+    monkeypatch.setattr(worker, "run_archive_worker", fake_archive)
+
+    await serve(stopped)
+
+    assert called == [expected]

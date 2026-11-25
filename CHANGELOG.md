@@ -18,5 +18,8 @@ versioning once releases begin.
   latest-state, TTL, and archive-pending records.
 - Deterministic canonical gzip NDJSON archive batches and immutable encrypted
   S3 writes with checksum-verified retries.
+- A manual-ack RabbitMQ telemetry consumer with classic demo queues, bounded
+  prefetch, delayed storage retries, dead lettering, and a separate singleton
+  archive-worker role.
 
 [Unreleased]: https://github.com/muhammadali182-q/herbie/compare/main...HEAD

@@ -54,6 +54,22 @@ an archive-pending record. A separate worker creates deterministic tenant/hour
 objects, then records the object key and checksum. Failed object writes remain
 visible for retry and reconciliation.
 
+RabbitMQ's MQTT plugin translates slash-separated MQTT topics into dot-separated
+`amq.topic` routing keys. The telemetry worker consumes the durable classic
+`herbie.telemetry.v1` queue with prefetch 100 and manual acknowledgements. It
+reverses that transport mapping, confirms the route in a fail-closed device
+registry, validates the payload identity, and ACKs only after the DynamoDB
+transaction succeeds or confirms an exact duplicate. Contract, identity,
+clock, and identity-conflict failures are rejected to
+`herbie.telemetry.dead.v1`.
+
+Storage failures are republished with publisher confirmation through a bounded
+TTL retry queue before the original delivery is ACKed. Retry attempts are read
+from broker-owned `x-death` metadata rather than a device-controlled header.
+The one-node demo uses classic queues and remains non-HA. The target profile
+requires a three-node quorum queue; that topology is documented, not deployed
+or measured.
+
 Archive objects are idempotent by content, not a claim of global exactly-once
 membership. The current slice serializes one in-process archive scheduler;
 multi-process archive workers require a durable batch-claim manifest before

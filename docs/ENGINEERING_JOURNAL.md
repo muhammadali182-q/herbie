@@ -598,3 +598,55 @@ adapters, and canonical batch behavior are implemented. Adapter verification
 used Moto 5.2.6. MQTT transport, broker ACLs, worker acknowledgement behavior,
 DynamoDB Local concurrency, MinIO compatibility, and AWS behavior remain
 unverified and are not marked complete by this documentation update.
+
+## 2026-11-25 - Durable RabbitMQ telemetry consumer
+
+- Branch or commit: `feat/mqtt-ingestion`
+- Requirements: FR-001, FR-005, QR-005, QR-006, QR-011
+- Related ADRs: ADR-0002, ADR-0004
+
+### Summary
+
+Added the runtime messaging boundary between RabbitMQ's MQTT plugin and the
+existing duplicate-safe DynamoDB ingestion service. The worker now supports
+separate telemetry and archive process roles. The telemetry role declares a
+durable classic queue, bounded prefetch, dead-letter path, and delayed retry
+path; the archive role is the single scheduler that drains durable pending
+records to S3-compatible storage.
+
+### Safety Decisions
+
+- RabbitMQ's slash-to-dot topic conversion is reversed only in the messaging
+  adapter. The resulting exact topic must exist in a fail-closed device
+  registry before it becomes a `DeviceIdentity`.
+- Valid new events and exact duplicates are ACKed only after the DynamoDB
+  repository returns. Contract, identity, future-clock, and identity-conflict
+  failures are rejected without requeue and therefore dead-lettered.
+- Storage failures use a publisher-confirmed TTL retry queue. The original
+  delivery is ACKed only after retry publication succeeds. Exhausted attempts
+  are dead-lettered; a failed retry publication requeues the original.
+- Retry counts come from RabbitMQ `x-death` entries for the retry queue, not
+  from an arbitrary producer header.
+- The demo queue is explicitly classic and single-node. A three-node quorum
+  queue remains target architecture rather than demonstrated HA.
+- MQTT packets are capped at 131,072 bytes and application payloads at 65,536
+  bytes. The worker checks payload size before JSON parsing.
+
+### Verification
+
+Local Windows verification used Python 3.14.0 and uv 0.11.26:
+
+- `uv lock --check`: 72 packages resolved.
+- `uv run ruff check backend simulator`: passed.
+- `uv run mypy`: no issues in 33 source files.
+- `uv run pytest`: 113 tests passed with 92.40% total branch coverage. One
+  pre-existing Starlette `TestClient` deprecation warning remains.
+- Messaging tests cover ACK-after-store, duplicate ACK, malformed and oversized
+  rejection, unregistered and mismatched identity, clock skew, sequence
+  conflict, confirmed retry, retry exhaustion, retry-publish failure, topology,
+  reconnect, shutdown, and runtime composition.
+
+Docker is not installed on this workstation, so `docker compose config`, real
+RabbitMQ, DynamoDB Local, MinIO, ACL, TLS, and crash-redelivery verification are
+not claimed by this commit. ADR-0002 remains `Proposed` pending those system
+tests.

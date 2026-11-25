@@ -41,3 +41,16 @@ domains or a managed MQTT service.
 
 If the spike fails within the allocated timebox, use Mosquitto for the device
 edge and a separate durable queue, then record the replacement ADR.
+
+## Implementation Progress
+
+The application adapter now declares separate telemetry and control queues, a
+dead-letter exchange and queue, and a bounded TTL retry path. It consumes with
+manual acknowledgements and prefetch 100, confirms retry publications, and
+ACKs valid or duplicate events only after DynamoDB acceptance. A separate
+process role drains the archive outbox.
+
+The ADR remains `Proposed`. Unit tests verify disposition and lifecycle logic,
+but acceptance still requires a real RabbitMQ MQTT test proving exact topic
+authorization, TLS transport, worker redelivery, dead lettering, command-topic
+isolation, and acceptable demo resource use.
