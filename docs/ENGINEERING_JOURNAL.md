@@ -598,3 +598,196 @@ adapters, and canonical batch behavior are implemented. Adapter verification
 used Moto 5.2.6. MQTT transport, broker ACLs, worker acknowledgement behavior,
 DynamoDB Local concurrency, MinIO compatibility, and AWS behavior remain
 unverified and are not marked complete by this documentation update.
+
+## 2026-11-25 - Durable RabbitMQ telemetry consumer
+
+- Branch or commit: `feat/mqtt-ingestion`
+- Requirements: FR-001, FR-005, QR-005, QR-006, QR-011
+- Related ADRs: ADR-0002, ADR-0004
+
+### Summary
+
+Added the runtime messaging boundary between RabbitMQ's MQTT plugin and the
+existing duplicate-safe DynamoDB ingestion service. The worker now supports
+separate telemetry and archive process roles. The telemetry role declares a
+durable classic queue, bounded prefetch, dead-letter path, and delayed retry
+path; the archive role is the single scheduler that drains durable pending
+records to S3-compatible storage.
+
+### Safety Decisions
+
+- RabbitMQ's slash-to-dot topic conversion is reversed only in the messaging
+  adapter. The resulting exact topic must exist in a fail-closed device
+  registry before it becomes a `DeviceIdentity`.
+- Valid new events and exact duplicates are ACKed only after the DynamoDB
+  repository returns. Contract, identity, future-clock, and identity-conflict
+  failures are rejected without requeue and therefore dead-lettered.
+- Storage failures use a publisher-confirmed TTL retry queue. The original
+  delivery is ACKed only after retry publication succeeds. Exhausted attempts
+  are dead-lettered; a failed retry publication requeues the original.
+- Retry counts come from RabbitMQ `x-death` entries for the retry queue, not
+  from an arbitrary producer header.
+- The demo queue is explicitly classic and single-node. A three-node quorum
+  queue remains target architecture rather than demonstrated HA.
+- MQTT packets are capped at 131,072 bytes and application payloads at 65,536
+  bytes. The worker checks payload size before JSON parsing.
+
+### Verification
+
+Local Windows verification used Python 3.14.0 and uv 0.11.26:
+
+- `uv lock --check`: 72 packages resolved.
+- `uv run ruff check backend simulator`: passed.
+- `uv run mypy`: no issues in 33 source files.
+- `uv run pytest`: 113 tests passed with 92.40% total branch coverage. One
+  pre-existing Starlette `TestClient` deprecation warning remains.
+- Messaging tests cover ACK-after-store, duplicate ACK, malformed and oversized
+  rejection, unregistered and mismatched identity, clock skew, sequence
+  conflict, confirmed retry, retry exhaustion, retry-publish failure, topology,
+  reconnect, shutdown, and runtime composition.
+
+Docker is not installed on this workstation, so `docker compose config`, real
+RabbitMQ, DynamoDB Local, MinIO, ACL, TLS, and crash-redelivery verification are
+not claimed by this commit. ADR-0002 remains `Proposed` pending those system
+tests.
+
+## 2026-11-25 - Deterministic MQTT simulator transport
+
+- Branch or commit: `feat/mqtt-ingestion`
+- Requirements: FR-005, QR-001, QR-002, QR-003, QR-011
+- Related ADRs: ADR-0002
+
+### Summary
+
+Extended the deterministic simulator with an explicit Paho MQTT transport while
+preserving the existing stdout fixture mode. Selected logical chargers use
+stable client IDs and independent connections, publish MQTT 5 or 3.1.1 at QoS
+1, wait for PUBACK, and never treat broker acknowledgement as durable-ingestion
+evidence.
+
+### Implementation
+
+- Connection count is independent from represented device count; deterministic
+  selection makes smaller connection experiments reproducible.
+- Per-device usernames render from tenant and charger identity. Passwords come
+  from an environment variable rather than CLI arguments, payloads, or logs. A
+  shared synthetic username remains possible by selecting a constant template
+  for a benchmark profile.
+- Server-authenticated TLS and optional client certificate/key files are
+  configurable. MQTT 5 is the default and MQTT 3.1.1 remains available.
+- Connection retry uses bounded exponential backoff with deterministic jitter.
+  Stable scenario seed, client identity, and reporting jitter support replay.
+- Synchronized mode creates timer bursts. Jittered mode spreads each round
+  through a cycle whose duration honors both the reporting interval and maximum
+  average message rate.
+- Results separate represented devices, connected clients, offered messages,
+  PUBACKs, failures, and elapsed generator time. Worker receipts, DynamoDB
+  writes, and archived events require independent measurement.
+
+### Verification
+
+Local Windows verification used Python 3.14.0 and uv 0.11.26:
+
+- `uv run ruff check backend simulator`: passed.
+- `uv run mypy`: no issues in 35 source files.
+- `uv run pytest`: 140 tests passed with 92.77% total branch coverage. One
+  pre-existing Starlette `TestClient` deprecation warning remains.
+- Simulator tests cover credentials, bounds, TLS setup, stable IDs, QoS 1,
+  PUBACK timeout, reconnect exhaustion and jitter, connection selection,
+  synchronized pacing, deterministic timer jitter, failed PUBACK accounting,
+  secret lookup, and result labeling.
+
+No real broker connection or load measurement was performed locally because
+Docker is unavailable. The implementation does not yet support a distributed
+generator, and no 2,000-connection or throughput claim is made by this commit.
+
+## 2026-11-25 - Compose-backed MQTT system evidence harness
+
+- Branch or commit: `feat/mqtt-ingestion`
+- Requirements: FR-001, FR-005, QR-005, QR-011
+- Related ADRs: ADR-0002, ADR-0004
+
+### Summary
+
+Added an opt-in system test and dedicated hosted-CI job using RabbitMQ's MQTT
+plugin, DynamoDB Local, and MinIO. The test provisions one device user at
+runtime with both ordinary resource permissions and exact `amq.topic`
+permissions. Credentials and resource names are limited to the disposable test
+environment.
+
+### Covered Procedure
+
+The harness starts a normal telemetry worker, publishes through the Paho
+simulator connection, verifies one durable event after a duplicate, starts the
+archive role, and checks one canonical gzip NDJSON membership in MinIO. It then
+proves that Device A cannot publish to Device B's topic or subscribe to Device
+B's command topic, verifies malformed input reaches the DLQ, and runs a helper
+worker that exits after DynamoDB commit but before ACK. A restarted normal
+worker must drain the redelivery without creating a second event.
+
+The test distinguishes MQTT PUBACK, queue delivery, DynamoDB acceptance, and
+S3-compatible archive evidence. RabbitMQ management counters and store contents
+are checked independently rather than inferring durable ingestion from PUBACK.
+
+### Local Verification Boundary
+
+Docker remains unavailable on the Windows workstation. Local checks therefore
+collected 143 passing tests, one intentionally skipped system test, and 92.88%
+branch coverage; Ruff, formatting, and strict mypy over 37 source files pass.
+The real-service result is pending the hosted `MQTT system` job and is not yet
+recorded as passing.
+ADR-0002 remains `Proposed` until that result and the remaining TLS/control-path
+criteria are evaluated.
+
+### First Hosted Attempt
+
+GitHub Actions run
+[`45585700340`](https://github.com/muhammadali182-q/herbie/actions/runs/45585700340)
+passed backend, frontend, documentation, container-build, and secret-scan jobs.
+The MQTT system job stopped before service startup because Quay returned HTTP
+401 for the previously configured MinIO image. No system test executed, so the
+run provides no MQTT or storage-behavior evidence.
+
+The local emulator was changed to the publicly pullable multi-architecture
+`bitnamilegacy/minio:2025.7.23-debian-12-r5` manifest pinned at digest
+`sha256:6dabb4a2088c9a79908de3bc05f4586c23ad2182c8908e7e3acbf61c1467fb20`.
+This legacy mirror is acceptable for bounded S3-compatibility tests but is not a
+recommended production image and receives no availability or support claim.
+
+The next hosted attempt reached application setup and verified RabbitMQ,
+DynamoDB Local, and the initial MQTT publication path. MinIO then rejected
+`PutPublicAccessBlock` with `MalformedXML`. The bucket bootstrap now tolerates
+only the observed unsupported API codes and only when an explicit local-emulator
+setting is enabled. The default remains fail-closed, and AWS profiles must not
+set the compatibility option.
+
+The following hosted run reached the archive process but timed out before the
+expected bucket became visible. RabbitMQ accepted the exact device user and the
+telemetry worker remained healthy; the preceding DynamoDB assertion passed.
+Worker subprocess output was previously buffered, so the harness now streams
+role logs to CI and checks bucket bootstrap separately from object flushing.
+This failed run is diagnostic evidence only, not an archive success claim.
+
+The streamed exception confirmed successful bucket bootstrap followed by
+MinIO rejecting the S3 server-side-encryption request because this local image
+has no KMS. Archive writes now retain encryption by default and expose a
+separate explicit local-emulator opt-out. KMS configuration and that opt-out are
+mutually exclusive. Moto continues to verify the default AES-256 request; the
+MinIO run is not evidence of encryption at rest.
+
+### Passing Hosted Baseline
+
+Commit `d1f3ba5f2287352b185112cb7831e616a7986caf` passed GitHub Actions run
+[`45697561268`](https://github.com/muhammadali182-q/herbie/actions/runs/45697561268).
+All six jobs succeeded. The normal backend job reported 143 passed, one
+intentionally skipped system test, and 93.08% branch coverage on Python 3.12.16.
+The isolated MQTT system procedure passed in 37.19 seconds using RabbitMQ
+4.1.4, DynamoDB Local 2.6.1, and MinIO 2025.7.23, followed by successful volume
+and network cleanup.
+
+This fixed baseline verifies MQTT-to-DynamoDB-to-MinIO flow, duplicate archive
+membership, exact cross-device publish and subscribe denial, malformed-message
+dead lettering, and process death after commit before ACK followed by
+idempotent redelivery. ADR-0002 is accepted only for the one-node semester
+demonstrator. TLS, domain command delivery, broker restart, declared load,
+resource use, clustering, AWS behavior, and availability remain unverified.

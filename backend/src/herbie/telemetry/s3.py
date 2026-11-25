@@ -24,10 +24,15 @@ class S3TelemetryArchiveSink(TelemetryArchiveSink):
         client: S3Client,
         bucket: str,
         kms_key_id: str | None = None,
+        *,
+        encrypt: bool = True,
     ) -> None:
+        if kms_key_id and not encrypt:
+            raise ValueError("KMS encryption cannot be disabled")
         self._client = client
         self._bucket = bucket
         self._kms_key_id = kms_key_id
+        self._encrypt = encrypt
 
     async def put(self, batch: ArchiveBatch) -> None:
         await asyncio.to_thread(self._put, batch)
@@ -49,7 +54,7 @@ class S3TelemetryArchiveSink(TelemetryArchiveSink):
         if self._kms_key_id:
             request["ServerSideEncryption"] = "aws:kms"
             request["SSEKMSKeyId"] = self._kms_key_id
-        else:
+        elif self._encrypt:
             request["ServerSideEncryption"] = "AES256"
 
         last_conflict: ClientError | None = None
@@ -91,7 +96,12 @@ class S3TelemetryArchiveSink(TelemetryArchiveSink):
         return True, existing.get("Metadata", {}).get("canonical-sha256")
 
 
-def ensure_archive_bucket(client: S3Client, bucket: str, region: str) -> None:
+def ensure_archive_bucket(
+    client: S3Client,
+    bucket: str,
+    region: str,
+    allow_unsupported_public_access_block: bool = False,
+) -> None:
     """Create a local/demo archive bucket with public access blocked."""
 
     try:
@@ -111,12 +121,18 @@ def ensure_archive_bucket(client: S3Client, bucket: str, region: str) -> None:
             if code != "BucketAlreadyOwnedByYou":
                 raise
 
-    client.put_public_access_block(
-        Bucket=bucket,
-        PublicAccessBlockConfiguration={
-            "BlockPublicAcls": True,
-            "IgnorePublicAcls": True,
-            "BlockPublicPolicy": True,
-            "RestrictPublicBuckets": True,
-        },
-    )
+    try:
+        client.put_public_access_block(
+            Bucket=bucket,
+            PublicAccessBlockConfiguration={
+                "BlockPublicAcls": True,
+                "IgnorePublicAcls": True,
+                "BlockPublicPolicy": True,
+                "RestrictPublicBuckets": True,
+            },
+        )
+    except ClientError as error:
+        code = error.response.get("Error", {}).get("Code")
+        unsupported = code in {"MalformedXML", "NotImplemented", "XNotImplemented"}
+        if not allow_unsupported_public_access_block or not unsupported:
+            raise

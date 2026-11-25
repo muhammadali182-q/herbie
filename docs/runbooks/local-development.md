@@ -40,6 +40,60 @@ docker compose up -d postgres rabbitmq dynamodb minio
 docker compose --profile app up --build
 ```
 
+The telemetry worker fails closed when `HERBIE_REGISTERED_DEVICES` is empty.
+For a local device, set it to a JSON list of canonical identities before
+starting the app profile:
+
+```text
+HERBIE_REGISTERED_DEVICES=["<tenant UUID>/<charger UUID>"]
+```
+
+The `worker` service consumes MQTT-derived telemetry and writes DynamoDB. The
+single `archive-worker` service drains archive-pending records to MinIO. Do not
+scale `archive-worker` beyond one instance until a durable batch-claim protocol
+exists.
+
+After device users and exact topic permissions are provisioned, publish a
+bounded deterministic scenario with:
+
+```powershell
+$env:HERBIE_SIMULATOR_MQTT_PASSWORD = "<untracked device password>"
+uv run herbie-simulator --mqtt --mqtt-host localhost `
+  --tenants 1 --chargers-per-tenant 1 --rounds 1 `
+  --connection-count 1 --message-rate 1 --reporting-mode synchronized
+```
+
+The default username is `device-{charger_id}`. The simulator output reports
+PUBACKs as broker acceptance and explicitly labels durable ingestion as
+unmeasured. Confirm DynamoDB and archive state separately before making an
+end-to-end claim. Use `--mqtt-tls --mqtt-ca-file <path>` for a TLS listener;
+add `--mqtt-cert-file` and `--mqtt-key-file` together for mutual TLS targets.
+
+Run the destructive, isolated MQTT system test only against the local Compose
+stack. It creates test users, queues, a DynamoDB table, and a MinIO bucket; the
+final command removes all Compose volumes:
+
+```powershell
+docker compose up -d rabbitmq dynamodb minio
+$env:HERBIE_RUN_SYSTEM_TESTS = "1"
+uv run pytest backend/tests/system -m system --no-cov -vv
+docker compose down --volumes --remove-orphans
+```
+
+The hosted `MQTT system` job runs the same procedure and prints service logs
+only after failure. Test credentials are local constants scoped to the
+short-lived Compose environment and are not cloud or personal credentials.
+
+Messaging topology:
+
+| Resource | Purpose |
+|---|---|
+| `amq.topic` | MQTT/AMQP topic exchange supplied by RabbitMQ |
+| `herbie.telemetry.v1` | Durable classic telemetry work queue |
+| `herbie.control.v1` | Separate future control-response queue |
+| `herbie.telemetry.retry.v1` | Bounded delayed storage retry queue |
+| `herbie.telemetry.dead.v1` | Poison, security, clock, conflict, and exhausted-retry queue |
+
 Local service endpoints:
 
 | Service | Endpoint |
@@ -88,5 +142,6 @@ docker compose --profile app down --volumes --remove-orphans
 The foundation is healthy when all backend checks pass; PostgreSQL, RabbitMQ,
 and the API report healthy on a Docker-enabled machine; DynamoDB and MinIO
 respond at their listed loopback endpoints; and `/api/v1/meta` identifies the
-expected version and protocol. The worker intentionally disables the API image
-health check because it does not expose HTTP.
+expected version and protocol. Worker container health checks remain disabled
+because those roles do not expose HTTP; dependency-aware readiness is tracked
+as operations work rather than being inferred from process existence.

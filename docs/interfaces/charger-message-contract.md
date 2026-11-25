@@ -19,6 +19,13 @@ identity must agree. Topic equality alone is not authentication. Production
 provisioning must give each device exact publish/subscribe ACLs. The v1
 contract accepts only canonical lowercase UUID identifiers and an exact route.
 
+For the local demonstrator, RabbitMQ applies both ordinary resource permissions
+and topic permissions. MQTT `/` separators become AMQP `.` separators at the
+worker queue. Device topic permissions must be anchored to the exact translated
+upstream telemetry route and exact downstream command route. The worker may
+derive `DeviceIdentity` from that routing key only after this broker policy is
+enforced and the route is found in the configured fleet-registry boundary.
+
 ## Telemetry Envelope
 
 ```json
@@ -61,8 +68,12 @@ contract accepts only canonical lowercase UUID identifiers and an exact route.
   backward. Across boots, `boot_started_at` orders state. UUID lexical order is
   never used as chronology.
 - All timestamps must be RFC 3339 text with an explicit timezone and are
-  normalized to UTC. Numeric epoch timestamps and implausible future times are
-  rejected.
+  normalized to UTC. Numeric epoch timestamps and implausible future
+  `occurred_at`, `sent_at`, or `boot_started_at` values are rejected.
+- Worker payloads are limited to 65,536 bytes in the initial profile and are
+  rejected before JSON parsing. The broker's 131,072-byte authenticated packet
+  limit leaves room for MQTT topic and property overhead while remaining
+  bounded.
 - Energy and power use integer Wh and W. Currency never appears in telemetry.
 - Booleans, numeric strings, and floats are not coerced into integer fields.
 - Unknown fields are rejected to expose incompatible producers early.
@@ -87,6 +98,10 @@ The archive is at-least-once across process crashes: records retain stable
 message IDs for reconciliation and downstream deduplication. One archive
 scheduler is used until a durable cross-process batch-claim protocol is added.
 
+The telemetry queue ACK boundary is DynamoDB acceptance, not S3 completion.
+The singleton archive worker drains durable pending records independently, so
+an object-store outage does not require broker redelivery of accepted events.
+
 ## Deterministic Simulator
 
 The simulator derives a run namespace from its schema version, seed, start
@@ -98,8 +113,24 @@ reuse message IDs. Tenant events are interleaved per charger slot.
 ```powershell
 uv run herbie-simulator --summary
 uv run herbie-simulator --tenants 3 --chargers-per-tenant 4 --rounds 3
+uv run herbie-simulator --mqtt --tenants 3 --chargers-per-tenant 4 `
+  --connection-count 12 --message-rate 200 --reporting-mode jittered
 ```
 
-The first implementation models many logical chargers but does not yet prove
-the same number of simultaneous MQTT connections. Connection-scale evidence is
-tracked separately under QR-001.
+MQTT mode uses Paho with MQTT 5 by default, QoS 1, stable
+`herbie-{charger_id}` client IDs, and a configurable username template. The
+password is read from `HERBIE_SIMULATOR_MQTT_PASSWORD` by default and is never
+included in an event or result. MQTT 3.1.1 and server-authenticated or mutual
+TLS files are configurable. Initial and subsequent reconnects use bounded
+exponential backoff with seed-derived jitter.
+
+Synchronized reporting publishes each selected charger's timer event as one
+phase-aligned round. Jittered reporting deterministically spreads those events
+through the reporting cycle. The result distinguishes represented devices,
+connected clients, offered messages, PUBACKs, and failures. A PUBACK proves
+broker acceptance only; it is not counted as a worker receipt, DynamoDB write,
+or archive record.
+
+Unit tests verify the transport logic, but they do not prove 2,000 simultaneous
+connections or the declared throughput. Connection-scale and rate evidence
+remain tracked separately under QR-001 through QR-003.

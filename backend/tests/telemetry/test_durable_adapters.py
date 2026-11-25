@@ -4,7 +4,7 @@ import gzip
 from collections.abc import Iterator
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 import boto3
@@ -290,6 +290,21 @@ async def test_s3_sink_is_idempotent_and_rejects_key_conflict(
 
 
 @pytest.mark.asyncio
+async def test_s3_sink_requires_explicit_opt_out_for_unencrypted_emulator(
+    aws_clients: tuple[DynamoDBClient, S3Client],
+) -> None:
+    s3 = aws_clients[1]
+    batch = build_archive_batch([stored(event(message_id=UUID(int=50)))])
+
+    await S3TelemetryArchiveSink(s3, BUCKET_NAME, encrypt=False).put(batch)
+
+    response = s3.head_object(Bucket=BUCKET_NAME, Key=batch.object_key)
+    assert "ServerSideEncryption" not in response
+    with pytest.raises(ValueError, match="cannot be disabled"):
+        S3TelemetryArchiveSink(s3, BUCKET_NAME, "kms-key", encrypt=False)
+
+
+@pytest.mark.asyncio
 async def test_s3_sink_retries_conditional_request_conflict(
     aws_clients: tuple[DynamoDBClient, S3Client],
     monkeypatch: pytest.MonkeyPatch,
@@ -375,6 +390,35 @@ def test_bootstrap_and_retention_validation_are_idempotent(
             event_retention_days=14,
             replay_retention_days=14,
         )
+
+
+def test_bucket_bootstrap_allows_only_explicitly_unsupported_local_api(
+    aws_clients: tuple[DynamoDBClient, S3Client],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    s3 = aws_clients[1]
+    unsupported = ClientError(
+        cast(
+            Any,
+            {
+                "Error": {"Code": "MalformedXML", "Message": "unsupported"},
+                "ResponseMetadata": {"HTTPStatusCode": 400},
+            },
+        ),
+        "PutPublicAccessBlock",
+    )
+    monkeypatch.setattr(
+        s3, "put_public_access_block", lambda **request: (_ for _ in ()).throw(unsupported)
+    )
+
+    ensure_archive_bucket(
+        s3,
+        BUCKET_NAME,
+        REGION,
+        allow_unsupported_public_access_block=True,
+    )
+    with pytest.raises(ClientError):
+        ensure_archive_bucket(s3, BUCKET_NAME, REGION)
 
 
 def test_table_bootstrap_rejects_an_incompatible_existing_table(

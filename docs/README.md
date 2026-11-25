@@ -26,6 +26,7 @@ deliverable.
 ## Evidence
 
 - [Telemetry storage baseline](evidence/telemetry-storage-baseline.md)
+- [MQTT ingestion baseline](evidence/mqtt-ingestion-baseline.md)
 
 ## Deliverables
 

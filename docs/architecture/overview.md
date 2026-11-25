@@ -54,6 +54,30 @@ an archive-pending record. A separate worker creates deterministic tenant/hour
 objects, then records the object key and checksum. Failed object writes remain
 visible for retry and reconciliation.
 
+RabbitMQ's MQTT plugin translates slash-separated MQTT topics into dot-separated
+`amq.topic` routing keys. The telemetry worker consumes the durable classic
+`herbie.telemetry.v1` queue with prefetch 100 and manual acknowledgements. It
+reverses that transport mapping, confirms the route in a fail-closed device
+registry, validates the payload identity, and ACKs only after the DynamoDB
+transaction succeeds or confirms an exact duplicate. Contract, identity,
+clock, and identity-conflict failures are rejected to
+`herbie.telemetry.dead.v1`.
+
+Storage failures are republished with publisher confirmation through a bounded
+TTL retry queue before the original delivery is ACKed. Retry attempts are read
+from broker-owned `x-death` metadata rather than a device-controlled header.
+The one-node demo uses classic queues and remains non-HA. The target profile
+requires a three-node quorum queue; that topology is documented, not deployed
+or measured.
+
+The simulator keeps deterministic logical event generation separate from MQTT
+transport. Each selected charger receives a stable client ID and broker login,
+publishes at QoS 1, and counts PUBACKs independently from worker receipts or
+durable writes. Synchronized mode creates phase-aligned bursts; jittered mode
+uses seed-derived timer offsets. Connection count and offered message rate are
+reported separately so represented identities are not mislabeled as concurrent
+connections.
+
 Archive objects are idempotent by content, not a claim of global exactly-once
 membership. The current slice serializes one in-process archive scheduler;
 multi-process archive workers require a durable batch-claim manifest before
@@ -67,6 +91,13 @@ deduplicate during reconciliation.
 | Local | Functional correctness, integration, load generation, deterministic reset | Does not prove cloud availability |
 | Demo-lite | Actual cloud hosting, managed storage, monitoring, deployment and teardown | May use single-node stateful services and cannot claim multi-AZ HA |
 | Target | Multi-AZ stateless services, broker quorum or managed MQTT, Multi-AZ PostgreSQL, scaling and encryption | Modeled unless temporarily deployed and measured |
+
+The loopback-only MinIO emulator does not implement AWS's
+`PutPublicAccessBlock` API. Its archive worker uses an explicit local-profile
+compatibility flag for that one unsupported call. This unconfigured MinIO image
+also has no KMS and uses a separate explicit local-only encryption opt-out. Both
+defaults remain fail-closed. AWS/demo-cloud profiles must encrypt every object
+and apply and verify all four public access block controls.
 
 ## Security Boundaries
 

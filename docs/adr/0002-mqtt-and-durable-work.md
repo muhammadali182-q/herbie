@@ -1,6 +1,6 @@
 # ADR-0002: MQTT Endpoint and Durable Work Broker
 
-- Status: Proposed
+- Status: Accepted for the one-node semester demonstrator
 - Date: 2026-11-24
 - Deciders: H.E.R.B.I.E. project team
 - Requirements: FR-003, FR-005, FR-009, QR-001 through QR-006
@@ -41,3 +41,25 @@ domains or a managed MQTT service.
 
 If the spike fails within the allocated timebox, use Mosquitto for the device
 edge and a separate durable queue, then record the replacement ADR.
+
+## Implementation Progress
+
+The application adapter now declares separate telemetry and control queues, a
+dead-letter exchange and queue, and a bounded TTL retry path. It consumes with
+manual acknowledgements and prefetch 100, confirms retry publications, and
+ACKs valid or duplicate events only after DynamoDB acceptance. A separate
+process role drains the archive outbox.
+
+Hosted run
+[`45697561268`](https://github.com/muhammadali182-q/herbie/actions/runs/45697561268)
+accepts RabbitMQ for the one-node semester demonstrator. Its real-service test
+proved exact topic and resource authorization, duplicate-safe DynamoDB writes,
+canonical MinIO archival, worker redelivery, dead lettering, and command-topic
+subscription isolation.
+
+This acceptance does not close every target criterion. TLS transport is
+configurable but has not completed a broker-backed system test. The command
+test covers subscription authorization rather than a domain command round trip,
+and resource use is not yet measured under the declared workload. Those items
+remain required before selecting the same topology for a cloud or production
+profile.

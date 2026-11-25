@@ -224,6 +224,18 @@ async def test_future_device_clock_is_rejected_without_pinning_latest_state() ->
 
 
 @pytest.mark.asyncio
+async def test_future_sent_time_is_rejected() -> None:
+    ingestion, repository = service()
+    telemetry = event()
+    future = telemetry.model_copy(update={"sent_at": SERVER_TIME + timedelta(minutes=6)})
+
+    with pytest.raises(TelemetryClockSkewError, match="sent_at"):
+        await ingest(ingestion, future)
+
+    assert await repository.latest_for_connector(TENANT_A, CHARGER_A, 1) is None
+
+
+@pytest.mark.asyncio
 async def test_connectors_keep_independent_latest_state() -> None:
     ingestion, repository = service()
     connector_one = event(connector_id=1, sequence=1)

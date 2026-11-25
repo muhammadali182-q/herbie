@@ -57,6 +57,8 @@ class TelemetryIngestionService:
         received_at = received_at.astimezone(UTC)
         if event.occurred_at > received_at + self._max_future_skew:
             raise TelemetryClockSkewError("event occurred_at exceeds allowed future skew")
+        if event.sent_at > received_at + self._max_future_skew:
+            raise TelemetryClockSkewError("event sent_at exceeds allowed future skew")
         if event.boot_started_at > received_at + self._max_future_skew:
             raise TelemetryClockSkewError("event boot_started_at exceeds allowed future skew")
 

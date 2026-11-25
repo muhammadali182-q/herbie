@@ -18,5 +18,11 @@ versioning once releases begin.
   latest-state, TTL, and archive-pending records.
 - Deterministic canonical gzip NDJSON archive batches and immutable encrypted
   S3 writes with checksum-verified retries.
+- A manual-ack RabbitMQ telemetry consumer with classic demo queues, bounded
+  prefetch, delayed storage retries, dead lettering, and a separate singleton
+  archive-worker role.
+- Deterministic Paho MQTT 5/3.1.1 simulator publishing with one stable client ID
+  per selected charger, QoS 1 PUBACK accounting, TLS configuration, bounded
+  reconnect backoff, and synchronized or seeded-jitter reporting modes.
 
 [Unreleased]: https://github.com/muhammadali182-q/herbie/compare/main...HEAD
