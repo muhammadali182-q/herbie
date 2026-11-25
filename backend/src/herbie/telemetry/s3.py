@@ -91,7 +91,12 @@ class S3TelemetryArchiveSink(TelemetryArchiveSink):
         return True, existing.get("Metadata", {}).get("canonical-sha256")
 
 
-def ensure_archive_bucket(client: S3Client, bucket: str, region: str) -> None:
+def ensure_archive_bucket(
+    client: S3Client,
+    bucket: str,
+    region: str,
+    allow_unsupported_public_access_block: bool = False,
+) -> None:
     """Create a local/demo archive bucket with public access blocked."""
 
     try:
@@ -111,12 +116,18 @@ def ensure_archive_bucket(client: S3Client, bucket: str, region: str) -> None:
             if code != "BucketAlreadyOwnedByYou":
                 raise
 
-    client.put_public_access_block(
-        Bucket=bucket,
-        PublicAccessBlockConfiguration={
-            "BlockPublicAcls": True,
-            "IgnorePublicAcls": True,
-            "BlockPublicPolicy": True,
-            "RestrictPublicBuckets": True,
-        },
-    )
+    try:
+        client.put_public_access_block(
+            Bucket=bucket,
+            PublicAccessBlockConfiguration={
+                "BlockPublicAcls": True,
+                "IgnorePublicAcls": True,
+                "BlockPublicPolicy": True,
+                "RestrictPublicBuckets": True,
+            },
+        )
+    except ClientError as error:
+        code = error.response.get("Error", {}).get("Code")
+        unsupported = code in {"MalformedXML", "NotImplemented", "XNotImplemented"}
+        if not allow_unsupported_public_access_block or not unsupported:
+            raise

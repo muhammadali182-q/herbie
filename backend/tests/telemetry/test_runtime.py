@@ -90,7 +90,12 @@ async def test_archive_runtime_bootstraps_both_stores_and_closes_clients(
     await runtime.run_archive_worker(settings, stopped)
 
     ensure_table.assert_called_once_with(dynamodb, settings.dynamodb_telemetry_table)
-    ensure_bucket.assert_called_once_with(s3, settings.s3_bucket, settings.s3_region)
+    ensure_bucket.assert_called_once_with(
+        s3,
+        settings.s3_bucket,
+        settings.s3_region,
+        False,
+    )
     run_loop.assert_awaited_once_with(archive, settings, stopped)
     assert dynamodb.closed is True
     assert s3.closed is True

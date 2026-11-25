@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     s3_region: str = "us-east-1"
     s3_bucket: str = "herbie-raw-local"
     s3_kms_key_id: str | None = None
+    s3_allow_unsupported_public_access_block: bool = False
     archive_flush_interval_seconds: float = Field(default=5.0, gt=0, le=3_600)
     archive_batch_limit: int = Field(default=1_000, ge=1, le=10_000)
 

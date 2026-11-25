@@ -732,9 +732,10 @@ are checked independently rather than inferring durable ingestion from PUBACK.
 ### Local Verification Boundary
 
 Docker remains unavailable on the Windows workstation. Local checks therefore
-collected 140 passing tests and one intentionally skipped system test; Ruff,
-formatting, and strict mypy over 37 source files pass. The real-service result
-is pending the hosted `MQTT system` job and is not yet recorded as passing.
+collected 141 passing tests, one intentionally skipped system test, and 92.81%
+branch coverage; Ruff, formatting, and strict mypy over 37 source files pass.
+The real-service result is pending the hosted `MQTT system` job and is not yet
+recorded as passing.
 ADR-0002 remains `Proposed` until that result and the remaining TLS/control-path
 criteria are evaluated.
 
@@ -752,3 +753,10 @@ The local emulator was changed to the publicly pullable multi-architecture
 `sha256:6dabb4a2088c9a79908de3bc05f4586c23ad2182c8908e7e3acbf61c1467fb20`.
 This legacy mirror is acceptable for bounded S3-compatibility tests but is not a
 recommended production image and receives no availability or support claim.
+
+The next hosted attempt reached application setup and verified RabbitMQ,
+DynamoDB Local, and the initial MQTT publication path. MinIO then rejected
+`PutPublicAccessBlock` with `MalformedXML`. The bucket bootstrap now tolerates
+only the observed unsupported API codes and only when an explicit local-emulator
+setting is enabled. The default remains fail-closed, and AWS profiles must not
+set the compatibility option.

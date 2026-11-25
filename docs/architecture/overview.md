@@ -92,6 +92,12 @@ deduplicate during reconciliation.
 | Demo-lite | Actual cloud hosting, managed storage, monitoring, deployment and teardown | May use single-node stateful services and cannot claim multi-AZ HA |
 | Target | Multi-AZ stateless services, broker quorum or managed MQTT, Multi-AZ PostgreSQL, scaling and encryption | Modeled unless temporarily deployed and measured |
 
+The loopback-only MinIO emulator does not implement AWS's
+`PutPublicAccessBlock` API. Its archive worker uses an explicit local-profile
+compatibility flag for that one unsupported call. The default remains
+fail-closed, and AWS/demo-cloud profiles must apply and verify all four public
+access block controls.
+
 ## Security Boundaries
 
 - Human users authenticate through an OIDC-compatible identity provider.

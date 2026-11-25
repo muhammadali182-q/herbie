@@ -84,6 +84,7 @@ async def run_archive_worker(settings: Settings, stopped: asyncio.Event) -> None
             s3,
             settings.s3_bucket,
             settings.s3_region,
+            settings.s3_allow_unsupported_public_access_block,
         )
         repository = DynamoTelemetryRepository(
             dynamodb,
