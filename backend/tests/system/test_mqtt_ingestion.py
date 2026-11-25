@@ -167,8 +167,6 @@ def start_worker(environment: dict[str, str]) -> subprocess.Popen[str]:
         [sys.executable, "-m", "herbie.worker"],
         cwd=ROOT,
         env=environment,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
         text=True,
     )
 
@@ -177,17 +175,18 @@ def stop_process(process: subprocess.Popen[str]) -> str:
     if process.poll() is None:
         process.terminate()
         try:
-            return process.communicate(timeout=10)[0]
+            output = process.communicate(timeout=10)[0]
+            return output or ""
         except subprocess.TimeoutExpired:
             process.kill()
-    return process.communicate(timeout=10)[0]
+    output = process.communicate(timeout=10)[0]
+    return output or ""
 
 
 def assert_process_running(process: subprocess.Popen[str], role: str) -> bool:
     if process.poll() is None:
         return True
-    output = process.communicate(timeout=5)[0]
-    raise AssertionError(f"{role} exited unexpectedly with {process.returncode}:\n{output}")
+    raise AssertionError(f"{role} exited unexpectedly with {process.returncode}")
 
 
 def item_count(dynamodb: Any, table: str, kind: str) -> int:
@@ -415,9 +414,17 @@ def test_mqtt_to_dynamodb_to_s3_acl_dlq_and_redelivery(service_readiness: None) 
         wait_until(
             lambda: (
                 assert_process_running(archive_worker, "archive worker")
+                and bucket in {item["Name"] for item in s3.list_buckets().get("Buckets", [])}
+            ),
+            timeout=30,
+            description="MinIO archive bucket bootstrap",
+        )
+        wait_until(
+            lambda: (
+                assert_process_running(archive_worker, "archive worker")
                 and len(s3.list_objects_v2(Bucket=bucket).get("Contents", [])) == 1
             ),
-            timeout=60,
+            timeout=30,
             description="one MinIO archive object",
         )
         archive_key = s3.list_objects_v2(Bucket=bucket)["Contents"][0]["Key"]

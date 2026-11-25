@@ -760,3 +760,10 @@ DynamoDB Local, and the initial MQTT publication path. MinIO then rejected
 only the observed unsupported API codes and only when an explicit local-emulator
 setting is enabled. The default remains fail-closed, and AWS profiles must not
 set the compatibility option.
+
+The following hosted run reached the archive process but timed out before the
+expected bucket became visible. RabbitMQ accepted the exact device user and the
+telemetry worker remained healthy; the preceding DynamoDB assertion passed.
+Worker subprocess output was previously buffered, so the harness now streams
+role logs to CI and checks bucket bootstrap separately from object flushing.
+This failed run is diagnostic evidence only, not an archive success claim.

@@ -21,6 +21,7 @@ from herbie.telemetry.service import TelemetryIngestionService
 async def run_telemetry_worker(settings: Settings, stopped: asyncio.Event) -> None:
     """Consume broker deliveries and commit them to the hot telemetry store."""
 
+    logger = structlog.get_logger("herbie.telemetry.runtime")
     dynamodb: Any = boto3.client(
         "dynamodb",
         endpoint_url=settings.dynamodb_endpoint,
@@ -31,6 +32,11 @@ async def run_telemetry_worker(settings: Settings, stopped: asyncio.Event) -> No
             ensure_telemetry_table,
             dynamodb,
             settings.dynamodb_telemetry_table,
+        )
+        logger.info(
+            "telemetry_storage_ready",
+            process_role="telemetry",
+            table=settings.dynamodb_telemetry_table,
         )
         repository = DynamoTelemetryRepository(
             dynamodb,
@@ -61,6 +67,7 @@ async def run_telemetry_worker(settings: Settings, stopped: asyncio.Event) -> No
 async def run_archive_worker(settings: Settings, stopped: asyncio.Event) -> None:
     """Flush the durable archive outbox through one configured scheduler."""
 
+    logger = structlog.get_logger("herbie.telemetry.runtime")
     dynamodb: Any = boto3.client(
         "dynamodb",
         endpoint_url=settings.dynamodb_endpoint,
@@ -85,6 +92,12 @@ async def run_archive_worker(settings: Settings, stopped: asyncio.Event) -> None
             settings.s3_bucket,
             settings.s3_region,
             settings.s3_allow_unsupported_public_access_block,
+        )
+        logger.info(
+            "archive_storage_ready",
+            process_role="archive",
+            table=settings.dynamodb_telemetry_table,
+            bucket=settings.s3_bucket,
         )
         repository = DynamoTelemetryRepository(
             dynamodb,
