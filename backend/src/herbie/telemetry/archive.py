@@ -1,5 +1,6 @@
 """Canonical, compressed batching of the durable telemetry archive outbox."""
 
+import asyncio
 import gzip
 import hashlib
 import json
@@ -71,8 +72,13 @@ class TelemetryArchiveService:
         self._repository = repository
         self._sink = sink
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._flush_lock = asyncio.Lock()
 
     async def flush(self, limit: int = 1_000) -> ArchiveFlushResult:
+        async with self._flush_lock:
+            return await self._flush(limit)
+
+    async def _flush(self, limit: int) -> ArchiveFlushResult:
         pending = await self._repository.list_archive_pending(limit)
         grouped: defaultdict[tuple[UUID, datetime], list[StoredTelemetry]] = defaultdict(list)
         for item in pending:

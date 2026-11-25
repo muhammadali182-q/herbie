@@ -30,3 +30,13 @@ def test_settings_are_immutable() -> None:
 
     with pytest.raises(ValidationError):
         setattr(settings, "api_port", 9000)  # noqa: B010 - exercise frozen runtime behavior
+
+
+def test_replay_retention_must_exceed_event_retention(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HERBIE_TELEMETRY_EVENT_RETENTION_DAYS", "365")
+    monkeypatch.setenv("HERBIE_TELEMETRY_REPLAY_RETENTION_DAYS", "180")
+
+    with pytest.raises(ValidationError, match="must exceed"):
+        Settings(_env_file=None)

@@ -49,7 +49,7 @@ class TelemetryEvent(BaseModel):
     sent_at: datetime
     boot_id: UUID
     boot_started_at: datetime
-    sequence: int = Field(ge=0)
+    sequence: int = Field(ge=0, le=2**63 - 1)
     tenant_id: UUID
     charger_id: UUID
     connector_id: int = Field(ge=1, le=64)

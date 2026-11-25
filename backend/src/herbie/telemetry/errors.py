@@ -21,6 +21,10 @@ class SequenceIdentityConflictError(TelemetryError):
     """One boot sequence was reused with a different message identity."""
 
 
+class BootIdentityConflictError(TelemetryError):
+    """One boot ID was reused with a different boot start timestamp."""
+
+
 class TelemetryClockSkewError(TelemetryError):
     """A device timestamp is implausibly ahead of server receipt time."""
 

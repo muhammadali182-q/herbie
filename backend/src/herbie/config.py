@@ -1,8 +1,9 @@
 """Typed application configuration."""
 
 from functools import lru_cache
+from typing import Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,8 +34,17 @@ class Settings(BaseSettings):
 
     dynamodb_endpoint: str | None = "http://localhost:8001"
     dynamodb_region: str = "us-east-1"
+    dynamodb_telemetry_table: str = "herbie-telemetry-local"
+    telemetry_event_retention_days: int = Field(default=14, ge=1, le=365)
+    telemetry_replay_retention_days: int = Field(default=180, ge=180, le=3_650)
     s3_endpoint: str | None = "http://localhost:9000"
     s3_bucket: str = "herbie-raw-local"
+
+    @model_validator(mode="after")
+    def validate_telemetry_retention(self) -> Self:
+        if self.telemetry_replay_retention_days <= self.telemetry_event_retention_days:
+            raise ValueError("telemetry replay retention must exceed event retention")
+        return self
 
 
 @lru_cache

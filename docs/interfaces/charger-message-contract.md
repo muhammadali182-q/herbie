@@ -50,8 +50,11 @@ contract accepts only canonical lowercase UUID identifiers and an exact route.
 - A retry retains the same `message_id`, `occurred_at`, and content.
 - Reusing a message ID with other content is a protocol conflict.
 - `boot_id` changes when the charger process restarts.
+- One `boot_id` retains one `boot_started_at`; changing it is a protocol
+  conflict.
 - `boot_started_at` orders different boots and cannot follow `occurred_at`.
-- `sequence` is monotonic only within a boot.
+- `sequence` is a signed 64-bit non-negative integer, monotonic only within a
+  boot.
 - The pair `(boot_id, sequence)` identifies one event and cannot be reused with
   another message ID.
 - Within one boot, sequence orders state even when the charger clock moves
@@ -80,6 +83,9 @@ Acceptance atomically creates an archive-pending record in the hot store. A
 separate worker groups pending events by tenant and UTC hour, produces an
 immutable gzip object with a content-derived key, and records its checksum.
 Failure leaves pending state for retry; writing an object does not mutate it.
+The archive is at-least-once across process crashes: records retain stable
+message IDs for reconciliation and downstream deduplication. One archive
+scheduler is used until a durable cross-process batch-claim protocol is added.
 
 ## Deterministic Simulator
 

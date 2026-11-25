@@ -54,6 +54,12 @@ an archive-pending record. A separate worker creates deterministic tenant/hour
 objects, then records the object key and checksum. Failed object writes remain
 visible for retry and reconciliation.
 
+Archive objects are idempotent by content, not a claim of global exactly-once
+membership. The current slice serializes one in-process archive scheduler;
+multi-process archive workers require a durable batch-claim manifest before
+horizontal scaling. Stable message IDs make overlap detectable and safe to
+deduplicate during reconciliation.
+
 ## Deployment Profiles
 
 | Profile | Intended evidence | Explicit limitation |

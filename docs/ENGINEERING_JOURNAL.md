@@ -446,3 +446,123 @@ storage.
   policy.
 - The 180-day replay-marker target must be checked against final billing and
   retention policy.
+
+## 2026-11-25 - Durable telemetry and canonical archive adapters
+
+- Branch or commit: `feat/telemetry-slice`
+- Requirements: FR-001, FR-005, QR-005, QR-010, ER-001
+- Related ADRs: ADR-0003, ADR-0004
+
+### Summary
+
+Added DynamoDB and S3 implementations of the telemetry persistence ports. An
+accepted event, replay marker, immutable boot identity, boot-sequence owner,
+archive-pending state, and eligible latest-state replacement now commit in one
+DynamoDB transaction. A separate adapter writes canonical gzip NDJSON batches
+to immutable, encrypted S3 objects and verifies retries by checksum metadata.
+
+### Rationale
+
+The in-memory telemetry core established ordering and idempotency semantics but
+could not survive a process restart. Writing the hot event and latest state in
+separate operations would expose partially accepted messages, while overwriting
+an S3 key could silently replace audit data. DynamoDB transactions and S3
+conditional writes preserve those boundaries without introducing a distributed
+transaction between the stores.
+
+The archive remains explicitly at-least-once. Content-derived keys make an
+identical batch retry idempotent, and stable message IDs make overlap detectable
+during reconciliation. Global exactly-once object membership was not claimed;
+it would require a durable cross-process batch-claim manifest. The current
+service therefore serializes flushes within one process and does not support
+multiple archive schedulers.
+
+### Implementation
+
+- Connector-scoped DynamoDB partitions hold immutable events, replay markers,
+  boot ownership, sequence ownership, and latest state. Tenant and archive
+  access use separate GSIs.
+- Transactional conflict reads distinguish exact retries from message, boot,
+  and sequence identity conflicts. Bounded retries handle latest-state and
+  transactional-read races.
+- Same-boot sequence and cross-boot start time remain the only chronology.
+  Boot start is immutable and sequence is bounded to a signed 64-bit integer.
+- Pending events do not activate their hot-event TTL until an archive receipt
+  is stored. Replay, boot, and sequence markers use the longer configured
+  retention, and bootstrap enables the `expires_at` table TTL.
+- Existing table bootstrap validates key types, both GSI schemas and
+  projections, on-demand billing, and the TTL attribute before accepting the
+  resource.
+- S3 writes use `If-None-Match: *`, canonical SHA-256 metadata, gzip NDJSON
+  metadata, AES-256 server-side encryption by default, and optional KMS keys.
+  Precondition failures verify existing content; conditional-write conflicts
+  receive bounded retries.
+- Bucket bootstrap rejects access-denied responses as absence and applies all
+  four S3 public-access-block controls.
+- Runtime dependencies include boto3, while boto3 typing packages and Moto
+  remain development-only. Runtime adapter imports do not require type stubs.
+- Settings and the environment template expose table and retention controls,
+  with replay retention validated as at least 180 days and longer than hot
+  event retention.
+
+### Verification
+
+Verification ran locally on Windows with Python 3.14.0 and uv 0.11.26; Python
+3.12 remains the project and hosted-CI target.
+
+- `uv lock --check`: passed with 65 locked packages resolved.
+- `uv run ruff check backend simulator`: passed.
+- `uv run ruff format --check backend simulator`: 27 files formatted.
+- `uv run mypy`: no issues in 27 source files.
+- `uv run pytest`: 80 tests passed with 92.16% total branch coverage, above the
+  90% gate. One pre-existing Starlette `TestClient` deprecation warning remains.
+- `uv run --no-sync pytest backend/tests/telemetry/test_durable_adapters.py -q
+  --no-cov`: 12 adapter tests passed.
+- `npm run lint:docs`: zero Markdown issues after this entry was appended.
+- A runtime import probe blocked all `mypy_boto3_*` modules and successfully
+  imported both production adapters.
+
+Moto 5.2.6 exercised injected transaction conflicts, idempotency, ordering,
+tenant and connector scope, TTL configuration, receipt immutability, bootstrap
+validation, S3 preconditions, a synthetic S3 409 race, encryption metadata, and
+end-to-end DynamoDB-to-S3 flushing. These are functional emulator results, not
+measured AWS service evidence.
+
+### Impact
+
+Tenant IDs remain present in DynamoDB partition keys, latest-state GSI keys, and
+S3 object prefixes. Conditional writes prevent accepted event mutation and S3
+replacement. Public access is blocked at bucket bootstrap, and object
+encryption is requested on every write. Pending state makes object-store
+failure visible and retryable without requiring broker redelivery.
+
+The design incurs several DynamoDB writes per accepted event and therefore does
+not rehabilitate the original per-message database cost estimate. Canonical
+batching avoids the explicitly infeasible one-S3-object-per-event pattern, but
+batch size, request cost, and retention still require measured workload data.
+
+### Limitations and Follow-up
+
+- Docker is unavailable locally, so ADR-0004 conformance against DynamoDB Local
+  and compatibility against the configured MinIO image remain unverified.
+- Moto transactions use unsynchronized whole-table rollback and cannot provide
+  valid concurrent-write evidence; concurrent duplicate/latest tests remain a
+  DynamoDB Local requirement rather than a flaky emulator assertion.
+- No AWS resource was deployed. Transaction, GSI propagation, TTL deletion,
+  encryption, KMS, public-access, durability, latency, and availability claims
+  remain unmeasured on AWS.
+- DynamoDB GSIs are eventually consistent, and TTL deletion is asynchronous.
+- Replay markers can expire after the configured window even if an extreme
+  archive backlog remains pending; queue-age monitoring and reconciliation must
+  keep lag well below that window.
+- Archive membership is at-least-once after process crashes. Add a durable batch
+  manifest before running multiple archive schedulers or claiming global
+  exactly-once membership.
+- The adapters are not yet wired into the worker. RabbitMQ identity, routing,
+  acknowledgement, dead-lettering, bounded prefetch, and crash-redelivery work
+  remains separate.
+- The S3 encryption and public-access APIs used here require a Docker-enabled
+  MinIO integration run before they can be claimed compatible with local
+  Compose.
+- Replace synchronous boto3 calls in worker threads only if measured queue age
+  or thread saturation justifies an async client migration.

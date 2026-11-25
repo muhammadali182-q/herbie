@@ -9,6 +9,7 @@ import pytest
 
 from herbie.telemetry.contracts import ChargerStatus, MessageType, TelemetryEvent, TelemetryPayload
 from herbie.telemetry.errors import (
+    BootIdentityConflictError,
     MessageIdentityConflictError,
     SequenceIdentityConflictError,
     TelemetryClockSkewError,
@@ -129,6 +130,21 @@ async def test_boot_sequence_reuse_with_other_message_id_is_rejected() -> None:
     await ingest(ingestion, original)
 
     with pytest.raises(SequenceIdentityConflictError):
+        await ingest(ingestion, conflict)
+
+
+@pytest.mark.asyncio
+async def test_boot_id_reuse_with_other_start_time_is_rejected() -> None:
+    ingestion, _ = service()
+    original = event(sequence=1)
+    conflict = event(
+        boot_started_at=datetime(2026, 1, 1, 0, 0, 1, tzinfo=UTC),
+        sequence=2,
+    )
+
+    await ingest(ingestion, original)
+
+    with pytest.raises(BootIdentityConflictError):
         await ingest(ingestion, conflict)
 
 

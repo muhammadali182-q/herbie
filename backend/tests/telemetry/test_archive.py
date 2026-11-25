@@ -1,5 +1,6 @@
 """Durable canonical archive-outbox and batching tests."""
 
+import asyncio
 import gzip
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -112,6 +113,21 @@ async def test_failed_object_write_leaves_pending_for_retry() -> None:
     assert repaired.events_archived == 1
     assert sink.attempts == 2
     assert len(durable_sink.objects) == 1
+
+
+@pytest.mark.asyncio
+async def test_one_archive_service_serializes_concurrent_flushes() -> None:
+    repository = InMemoryTelemetryRepository()
+    event = telemetry(TENANT_A, 1)
+    await accept(repository, event)
+    sink = InMemoryTelemetryArchiveSink()
+    archive = TelemetryArchiveService(repository, sink, lambda: ARCHIVE_TIME)
+
+    first, second = await asyncio.gather(archive.flush(), archive.flush())
+
+    assert first.events_archived + second.events_archived == 1
+    assert sink.put_attempts == 1
+    assert len(sink.objects) == 1
 
 
 @pytest.mark.asyncio

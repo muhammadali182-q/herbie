@@ -115,6 +115,11 @@ def test_payload_rejects_negative_or_implausible_measurements() -> None:
         )
 
 
+def test_contract_rejects_sequence_outside_signed_64_bit_range() -> None:
+    with pytest.raises(ValidationError):
+        valid_event(sequence=2**63)
+
+
 def test_topic_round_trips_device_identity() -> None:
     tenant_id = UUID("11111111-1111-1111-1111-111111111111")
     charger_id = UUID("22222222-2222-2222-2222-222222222222")

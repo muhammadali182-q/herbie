@@ -1,9 +1,11 @@
 """Deterministic in-memory adapters for local development and tests."""
 
 import asyncio
+from datetime import datetime
 from uuid import UUID
 
 from herbie.telemetry.errors import (
+    BootIdentityConflictError,
     MessageIdentityConflictError,
     SequenceIdentityConflictError,
 )
@@ -21,6 +23,7 @@ class InMemoryTelemetryRepository(TelemetryRepository):
 
     def __init__(self) -> None:
         self._events: dict[TelemetryKey, StoredTelemetry] = {}
+        self._boots: dict[tuple[UUID, UUID, int, UUID], datetime] = {}
         self._sequences: dict[tuple[UUID, UUID, int, UUID, int], TelemetryKey] = {}
         self._latest: dict[tuple[UUID, UUID, int], StoredTelemetry] = {}
         self._archive_pending: dict[TelemetryKey, StoredTelemetry] = {}
@@ -36,6 +39,12 @@ class InMemoryTelemetryRepository(TelemetryRepository):
             event.connector_id,
             event.boot_id,
             event.sequence,
+        )
+        boot_key = (
+            event.tenant_id,
+            event.charger_id,
+            event.connector_id,
+            event.boot_id,
         )
         connector_key = (event.tenant_id, event.charger_id, event.connector_id)
 
@@ -53,6 +62,11 @@ class InMemoryTelemetryRepository(TelemetryRepository):
                     stored=existing,
                 )
 
+            boot_started_at = self._boots.get(boot_key)
+            if boot_started_at is not None and boot_started_at != event.boot_started_at:
+                raise BootIdentityConflictError(
+                    "boot ID was already accepted with another start timestamp"
+                )
             sequence_owner = self._sequences.get(sequence_key)
             if sequence_owner is not None:
                 raise SequenceIdentityConflictError(
@@ -60,6 +74,7 @@ class InMemoryTelemetryRepository(TelemetryRepository):
                 )
 
             self._events[event_key] = telemetry
+            self._boots[boot_key] = event.boot_started_at
             self._sequences[sequence_key] = event_key
             self._archive_pending[event_key] = telemetry
             current = self._latest.get(connector_key)
