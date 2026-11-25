@@ -1,6 +1,6 @@
 # ADR-0002: MQTT Endpoint and Durable Work Broker
 
-- Status: Proposed
+- Status: Accepted for the one-node semester demonstrator
 - Date: 2026-11-24
 - Deciders: H.E.R.B.I.E. project team
 - Requirements: FR-003, FR-005, FR-009, QR-001 through QR-006
@@ -50,7 +50,16 @@ manual acknowledgements and prefetch 100, confirms retry publications, and
 ACKs valid or duplicate events only after DynamoDB acceptance. A separate
 process role drains the archive outbox.
 
-The ADR remains `Proposed`. Unit tests verify disposition and lifecycle logic,
-but acceptance still requires a real RabbitMQ MQTT test proving exact topic
-authorization, TLS transport, worker redelivery, dead lettering, command-topic
-isolation, and acceptable demo resource use.
+Hosted run
+[`45697561268`](https://github.com/muhammadali182-q/herbie/actions/runs/45697561268)
+accepts RabbitMQ for the one-node semester demonstrator. Its real-service test
+proved exact topic and resource authorization, duplicate-safe DynamoDB writes,
+canonical MinIO archival, worker redelivery, dead lettering, and command-topic
+subscription isolation.
+
+This acceptance does not close every target criterion. TLS transport is
+configurable but has not completed a broker-backed system test. The command
+test covers subscription authorization rather than a domain command round trip,
+and resource use is not yet measured under the declared workload. Those items
+remain required before selecting the same topology for a cloud or production
+profile.

@@ -774,3 +774,20 @@ has no KMS. Archive writes now retain encryption by default and expose a
 separate explicit local-emulator opt-out. KMS configuration and that opt-out are
 mutually exclusive. Moto continues to verify the default AES-256 request; the
 MinIO run is not evidence of encryption at rest.
+
+### Passing Hosted Baseline
+
+Commit `d1f3ba5f2287352b185112cb7831e616a7986caf` passed GitHub Actions run
+[`45697561268`](https://github.com/muhammadali182-q/herbie/actions/runs/45697561268).
+All six jobs succeeded. The normal backend job reported 143 passed, one
+intentionally skipped system test, and 93.08% branch coverage on Python 3.12.16.
+The isolated MQTT system procedure passed in 37.19 seconds using RabbitMQ
+4.1.4, DynamoDB Local 2.6.1, and MinIO 2025.7.23, followed by successful volume
+and network cleanup.
+
+This fixed baseline verifies MQTT-to-DynamoDB-to-MinIO flow, duplicate archive
+membership, exact cross-device publish and subscribe denial, malformed-message
+dead lettering, and process death after commit before ACK followed by
+idempotent redelivery. ADR-0002 is accepted only for the one-node semester
+demonstrator. TLS, domain command delivery, broker restart, declared load,
+resource use, clustering, AWS behavior, and availability remain unverified.

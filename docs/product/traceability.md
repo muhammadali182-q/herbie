@@ -6,11 +6,11 @@ component evidence does not verify an unfinished parent requirement.
 
 | Requirement | Design owner | Planned implementation | Planned verification | Status and evidence |
 |---|---|---|---|---|
-| FR-001 Tenant isolation | ADR-0003, tenancy architecture | Identity-derived tenant context, PostgreSQL RLS, scoped data keys, broker ACLs | API, repository, database, export, and MQTT negative tests | Planned; telemetry keys are tenant-scoped, but the required negative matrix is not complete |
+| FR-001 Tenant isolation | ADR-0003, tenancy architecture | Identity-derived tenant context, PostgreSQL RLS, scoped data keys, broker ACLs | API, repository, database, export, and MQTT negative tests | Implemented and verified for exact per-device MQTT topic denial only; PostgreSQL, API, and export isolation remain planned. See [MQTT ingestion evidence][mqtt-evidence] |
 | FR-002 Tenant configuration | Domain architecture | Tenant, site, charger, tariff, maintenance, and alert APIs | Three-tenant end-to-end scenario | Planned |
 | FR-003 Sessions | Session state ADR to be added | Transactional session state machine and idempotency keys | Unit, concurrency, duplicate, and end-to-end tests | Planned |
 | FR-004 Power allocation | Allocation ADR to be added | Integer weighted max-min allocation with serialized site decisions | Property and concurrent command tests | Planned |
-| FR-005 Telemetry and metering | ADR-0002, ADR-0003, ADR-0004 | Versioned MQTT messages, conditional inserts, monotonic meter checkpoints | Duplicate, stale, reset, and ordering fixtures | Implemented for direct telemetry validation, ordering, durable persistence, and canonical archive; MQTT transport and session metering remain planned. See [telemetry storage evidence][telemetry-evidence] |
+| FR-005 Telemetry and metering | ADR-0002, ADR-0003, ADR-0004 | Versioned MQTT messages, conditional inserts, monotonic meter checkpoints | Duplicate, stale, reset, and ordering fixtures | Verified for MQTT transport, duplicate-safe persistence, and canonical local archive; session metering remains planned. See [telemetry storage evidence][telemetry-evidence] and [MQTT ingestion evidence][mqtt-evidence] |
 | FR-006 Session charges | Billing ADR to be added | Immutable tariff versions and integer currency calculation | Golden billing fixtures | Planned |
 | FR-007 Platform invoices | Billing ADR to be added | Unique period invoice and reconciled usage counters | Repeated generation and reconciliation tests | Planned |
 | FR-008 Dashboard | UI architecture to be added | Responsive operator dashboard over tenant-scoped API | Browser workflow and cross-tenant tests | Planned |
@@ -20,13 +20,13 @@ component evidence does not verify an unfinished parent requirement.
 | QR-002 Baseline rate | Performance plan | Instrumented MQTT workload | 200 messages/second for at least 30 minutes | Planned |
 | QR-003 Peak rate | Performance plan | Instrumented MQTT workload | 1,000 messages/second for at least five minutes or measured limit | Planned |
 | QR-004 Authorization latency | Performance plan | Instrumented authorization path | p50, p95, p99, and errors under declared normal load | Planned |
-| QR-005 Resilience | Deployment architecture | Replicated stateless processes and at-least-once work | Forced process termination under load | Planned; storage idempotency is verified, but broker redelivery is not |
+| QR-005 Resilience | Deployment architecture | Replicated stateless processes and at-least-once work | Forced process termination under load | Implemented and verified for one worker death after commit and before ACK; API failure and under-load recovery remain planned. See [MQTT ingestion evidence][mqtt-evidence] |
 | QR-006 Noisy neighbor | Tenancy architecture | Quotas, bounded workers, separate control and telemetry work | Hot-tenant paired control experiment | Planned |
 | QR-007 Observability | Operations architecture | Structured logs, metrics, health, dashboards, alerts | Alert and incident drill | Planned |
 | QR-008 Deployment | Infrastructure ADR to be added | Docker definitions, Terraform profiles, CI deployment | Fresh deploy and destroy run | Planned; local definitions and image builds are implemented |
 | QR-009 Evolution | Upgrade runbook | Versioned contracts and expand-migrate-contract changes | N/N+1 compatibility and rollback | Planned |
 | QR-010 Restore | Backup runbook | Database backup and isolated restore | Restore and record reconciliation | Planned |
-| QR-011 Security | Threat model to be added | TLS, secrets, least privilege, validation, audit | Secret, dependency, authorization, and configuration scans | Planned; strict payload validation and secret scanning are implemented |
+| QR-011 Security | Threat model to be added | TLS, secrets, least privilege, validation, audit | Secret, dependency, authorization, and configuration scans | Implemented for strict validation, secret scanning, and exact demo topic/resource ACLs; TLS system evidence and complete threat model remain planned. See [MQTT ingestion evidence][mqtt-evidence] |
 | QR-012 Elasticity | Scaling plan | Queue-age-driven worker scaling in target profile | Scale timeline and task-hour comparison | Planned |
 | ER-001 to ER-004 Economics | Economic model | Versioned assumptions and formulas | Recalculation and actual-versus-model review | Planned |
 | LC-001 to LC-003 Lifecycle | Runbooks and final report | Responsibility, incident, upgrade, offboarding, and teardown procedures | Timed operational drills | Planned |
@@ -56,3 +56,4 @@ verification is GitHub Actions run [`45566373644`][storage-ci].
 [storage-ci]: https://github.com/muhammadali182-q/herbie/actions/runs/45566373644
 [storage-commit]: https://github.com/muhammadali182-q/herbie/commit/8dccb85cfad5788f1ac352a2ea3ffc75c19c62bf
 [telemetry-evidence]: ../evidence/telemetry-storage-baseline.md
+[mqtt-evidence]: ../evidence/mqtt-ingestion-baseline.md
