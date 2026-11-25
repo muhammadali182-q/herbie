@@ -16,7 +16,7 @@ component evidence does not verify an unfinished parent requirement.
 | FR-008 Dashboard | UI architecture to be added | Responsive operator dashboard over tenant-scoped API | Browser workflow and cross-tenant tests | Planned |
 | FR-009 Commands | ADR-0002 | Transactional outbox and versioned commands | Crash, duplicate, expiry, and stale-version tests | Planned |
 | FR-010 Offboarding | Lifecycle runbook | Export, final invoice, revoke, delete, retention report | Synthetic tenant EOL drill | Planned |
-| QR-001 Charger representation | Performance plan | Deterministic distributed simulator | Identity-count, concurrent-connection, and generator-limit evidence | Implemented for deterministic logical event generation only; 2,000 MQTT connections remain unverified. See [telemetry storage evidence][telemetry-evidence] |
+| QR-001 Charger representation | Performance plan | Deterministic distributed simulator | Identity-count, concurrent-connection, and generator-limit evidence | Implemented for deterministic logical generation and configurable MQTT clients; 2,000 concurrent connections remain unverified. See [telemetry storage evidence][telemetry-evidence] |
 | QR-002 Baseline rate | Performance plan | Instrumented MQTT workload | 200 messages/second for at least 30 minutes | Planned |
 | QR-003 Peak rate | Performance plan | Instrumented MQTT workload | 1,000 messages/second for at least five minutes or measured limit | Planned |
 | QR-004 Authorization latency | Performance plan | Instrumented authorization path | p50, p95, p99, and errors under declared normal load | Planned |
@@ -36,7 +36,7 @@ component evidence does not verify an unfinished parent requirement.
 | Component | Status | Evidence boundary |
 |---|---|---|
 | Strict telemetry contract and trusted identity boundary | Verified | Unit and service tests reject malformed, mismatched, stale, conflicting, and future-skewed input; no broker ACL claim |
-| Deterministic simulator | Verified | Stable multi-tenant logical publications and expected energy vectors; no MQTT connection or rate claim |
+| Deterministic simulator | Verified | Stable multi-tenant logical publications, expected energy vectors, MQTT client IDs, pacing, reconnects, and PUBACK accounting; no connection-scale or throughput claim |
 | DynamoDB adapter | Verified | Moto-backed transaction, ordering, replay, TTL-configuration, and bootstrap tests; no DynamoDB Local or AWS claim |
 | S3 adapter | Verified | Moto-backed immutable encrypted writes, checksum retry, and public-access configuration tests; no MinIO or AWS claim |
 | Archive outbox and canonical batching | Verified | Atomic archive-pending state and deterministic gzip NDJSON flushing; runtime scheduling and global exactly-once membership are not claimed |

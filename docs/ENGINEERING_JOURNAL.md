@@ -650,3 +650,53 @@ Docker is not installed on this workstation, so `docker compose config`, real
 RabbitMQ, DynamoDB Local, MinIO, ACL, TLS, and crash-redelivery verification are
 not claimed by this commit. ADR-0002 remains `Proposed` pending those system
 tests.
+
+## 2026-11-25 - Deterministic MQTT simulator transport
+
+- Branch or commit: `feat/mqtt-ingestion`
+- Requirements: FR-005, QR-001, QR-002, QR-003, QR-011
+- Related ADRs: ADR-0002
+
+### Summary
+
+Extended the deterministic simulator with an explicit Paho MQTT transport while
+preserving the existing stdout fixture mode. Selected logical chargers use
+stable client IDs and independent connections, publish MQTT 5 or 3.1.1 at QoS
+1, wait for PUBACK, and never treat broker acknowledgement as durable-ingestion
+evidence.
+
+### Implementation
+
+- Connection count is independent from represented device count; deterministic
+  selection makes smaller connection experiments reproducible.
+- Per-device usernames render from tenant and charger identity. Passwords come
+  from an environment variable rather than CLI arguments, payloads, or logs. A
+  shared synthetic username remains possible by selecting a constant template
+  for a benchmark profile.
+- Server-authenticated TLS and optional client certificate/key files are
+  configurable. MQTT 5 is the default and MQTT 3.1.1 remains available.
+- Connection retry uses bounded exponential backoff with deterministic jitter.
+  Stable scenario seed, client identity, and reporting jitter support replay.
+- Synchronized mode creates timer bursts. Jittered mode spreads each round
+  through a cycle whose duration honors both the reporting interval and maximum
+  average message rate.
+- Results separate represented devices, connected clients, offered messages,
+  PUBACKs, failures, and elapsed generator time. Worker receipts, DynamoDB
+  writes, and archived events require independent measurement.
+
+### Verification
+
+Local Windows verification used Python 3.14.0 and uv 0.11.26:
+
+- `uv run ruff check backend simulator`: passed.
+- `uv run mypy`: no issues in 35 source files.
+- `uv run pytest`: 140 tests passed with 92.77% total branch coverage. One
+  pre-existing Starlette `TestClient` deprecation warning remains.
+- Simulator tests cover credentials, bounds, TLS setup, stable IDs, QoS 1,
+  PUBACK timeout, reconnect exhaustion and jitter, connection selection,
+  synchronized pacing, deterministic timer jitter, failed PUBACK accounting,
+  secret lookup, and result labeling.
+
+No real broker connection or load measurement was performed locally because
+Docker is unavailable. The implementation does not yet support a distributed
+generator, and no 2,000-connection or throughput claim is made by this commit.

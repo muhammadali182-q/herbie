@@ -113,8 +113,24 @@ reuse message IDs. Tenant events are interleaved per charger slot.
 ```powershell
 uv run herbie-simulator --summary
 uv run herbie-simulator --tenants 3 --chargers-per-tenant 4 --rounds 3
+uv run herbie-simulator --mqtt --tenants 3 --chargers-per-tenant 4 `
+  --connection-count 12 --message-rate 200 --reporting-mode jittered
 ```
 
-The first implementation models many logical chargers but does not yet prove
-the same number of simultaneous MQTT connections. Connection-scale evidence is
-tracked separately under QR-001.
+MQTT mode uses Paho with MQTT 5 by default, QoS 1, stable
+`herbie-{charger_id}` client IDs, and a configurable username template. The
+password is read from `HERBIE_SIMULATOR_MQTT_PASSWORD` by default and is never
+included in an event or result. MQTT 3.1.1 and server-authenticated or mutual
+TLS files are configurable. Initial and subsequent reconnects use bounded
+exponential backoff with seed-derived jitter.
+
+Synchronized reporting publishes each selected charger's timer event as one
+phase-aligned round. Jittered reporting deterministically spreads those events
+through the reporting cycle. The result distinguishes represented devices,
+connected clients, offered messages, PUBACKs, and failures. A PUBACK proves
+broker acceptance only; it is not counted as a worker receipt, DynamoDB write,
+or archive record.
+
+Unit tests verify the transport logic, but they do not prove 2,000 simultaneous
+connections or the declared throughput. Connection-scale and rate evidence
+remain tracked separately under QR-001 through QR-003.

@@ -53,6 +53,22 @@ single `archive-worker` service drains archive-pending records to MinIO. Do not
 scale `archive-worker` beyond one instance until a durable batch-claim protocol
 exists.
 
+After device users and exact topic permissions are provisioned, publish a
+bounded deterministic scenario with:
+
+```powershell
+$env:HERBIE_SIMULATOR_MQTT_PASSWORD = "<untracked device password>"
+uv run herbie-simulator --mqtt --mqtt-host localhost `
+  --tenants 1 --chargers-per-tenant 1 --rounds 1 `
+  --connection-count 1 --message-rate 1 --reporting-mode synchronized
+```
+
+The default username is `device-{charger_id}`. The simulator output reports
+PUBACKs as broker acceptance and explicitly labels durable ingestion as
+unmeasured. Confirm DynamoDB and archive state separately before making an
+end-to-end claim. Use `--mqtt-tls --mqtt-ca-file <path>` for a TLS listener;
+add `--mqtt-cert-file` and `--mqtt-key-file` together for mutual TLS targets.
+
 Messaging topology:
 
 | Resource | Purpose |

@@ -70,6 +70,14 @@ The one-node demo uses classic queues and remains non-HA. The target profile
 requires a three-node quorum queue; that topology is documented, not deployed
 or measured.
 
+The simulator keeps deterministic logical event generation separate from MQTT
+transport. Each selected charger receives a stable client ID and broker login,
+publishes at QoS 1, and counts PUBACKs independently from worker receipts or
+durable writes. Synchronized mode creates phase-aligned bursts; jittered mode
+uses seed-derived timer offsets. Connection count and offered message rate are
+reported separately so represented identities are not mislabeled as concurrent
+connections.
+
 Archive objects are idempotent by content, not a claim of global exactly-once
 membership. The current slice serializes one in-process archive scheduler;
 multi-process archive workers require a durable batch-claim manifest before
