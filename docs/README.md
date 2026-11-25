@@ -23,10 +23,14 @@ deliverable.
 - [Engineering journal](ENGINEERING_JOURNAL.md)
 - [Local development runbook](runbooks/local-development.md)
 
+## Evidence
+
+- [Telemetry storage baseline](evidence/telemetry-storage-baseline.md)
+
 ## Deliverables
 
 - [Assignment 1 PDF](Project%20Description.pdf)
 - [Assignment 1 assumption review](deliverables/d1-assumption-review.md)
 
-Testing evidence, runbooks, demo material, economic models, and the final
-report will be added alongside the implementation that produces them.
+Additional system evidence, runbooks, demo material, economic models, and the
+final report will be added alongside the implementation that produces them.

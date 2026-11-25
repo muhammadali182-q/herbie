@@ -566,3 +566,35 @@ batch size, request cost, and retention still require measured workload data.
   Compose.
 - Replace synchronous boto3 calls in worker threads only if measured queue age
   or thread saturation justifies an async client migration.
+
+## 2026-11-25 - Telemetry storage evidence reconciliation
+
+- Branch or commit: `feat/telemetry-slice` at implementation baseline
+  `8dccb85cfad5788f1ac352a2ea3ffc75c19c62bf`
+- Requirements: FR-005, QR-001, QR-005, QR-008, QR-011
+- Related ADRs: ADR-0002, ADR-0004
+
+### Summary
+
+Reconciled traceability and planning documents with the implemented telemetry
+contract, deterministic simulator, DynamoDB adapter, S3 adapter, and archive
+outbox. Added a fixed evidence record linking the implementation commit,
+hosted CI run, source tests, measured results, and unverified boundaries.
+
+### Verification
+
+GitHub Actions run
+[`45566373644`](https://github.com/muhammadali182-q/herbie/actions/runs/45566373644)
+tested the exact implementation SHA on Ubuntu 26.04.1 with Python 3.12.16 and
+uv 0.11.26. All five jobs passed. The backend collected 80 tests and reported
+92.56% total branch coverage with one Starlette deprecation warning. The
+previous 92.16% figure remains a separate local Windows/Python 3.14.0 result
+and is not presented as the hosted measurement.
+
+### Evidence Boundary
+
+The strict contract, deterministic logical generator, transaction and archive
+adapters, and canonical batch behavior are implemented. Adapter verification
+used Moto 5.2.6. MQTT transport, broker ACLs, worker acknowledgement behavior,
+DynamoDB Local concurrency, MinIO compatibility, and AWS behavior remain
+unverified and are not marked complete by this documentation update.

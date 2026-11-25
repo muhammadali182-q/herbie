@@ -1,20 +1,21 @@
 # Semester Implementation Plan
 
-The implementation is timeboxed to fifteen working days because fewer than
-three weeks remain. Infrastructure and dashboard work may proceed in parallel
-after the contracts are fixed.
+Phases express dependency order rather than calendar-day commitments.
+Infrastructure and dashboard work may proceed in parallel after their contracts
+and security boundaries are fixed.
 
-| Phase | Target | Deliverables | Exit gate |
+| Phase | Status | Deliverables | Exit gate or current boundary |
 |---|---|---|---|
-| 0. Scope and governance | Day 1 | Scope, requirements, traceability, ADRs, risk register, journal | Every mandatory concern maps to evidence |
-| 1. Reproducible foundation | Days 1-2 | Monorepo, pinned tools, local services, API/worker/web skeleton, CI | Clean setup and fast checks succeed |
-| 2. Telemetry walking skeleton | Days 3-4 | Simulator, MQTT contract, ingestion, hot storage, archive, fleet view | One duplicate-safe event travels end to end |
-| 3. Safe multi-tenancy | Days 5-6 | Identity, tenant context, RLS, broker ACLs, configuration | Cross-tenant negative matrix passes |
-| 4. Sessions and allocation | Days 7-8 | State machine, outbox, commands, allocation algorithm | Session and allocation invariants pass |
-| 5. Metering and billing | Days 9-10 | Checkpoints, tariff snapshots, charges, usage invoices | Golden reconciliation is exact and repeatable |
-| 6. Cloud operations | Days 11-12 | Terraform profiles, monitoring, backup, rollback, teardown | Cost-controlled deploy and destroy are reproducible |
-| 7. Quantitative evidence | Days 13-14 | Load, isolation, failure, upgrade, security, EOL, economics | Evidence index links raw results to a fixed commit |
-| 8. Demonstration and report | Day 15 | Demo script, final report, contribution record, release | A non-author can execute the documented demo |
+| 0. Scope and governance | Completed | Scope, requirements, traceability, ADRs, risk register, journal | Mandatory concerns have stable IDs and evidence rules; named operational ownership remains follow-up work |
+| 1. Reproducible foundation | Completed | Monorepo, pinned tools, local services, API/worker/web skeleton, CI | Clean setup and hosted quality checks succeed |
+| 2. Telemetry storage slice | Completed | Deterministic simulator, strict MQTT contract, duplicate-safe ingestion core, hot storage, archive outbox | Direct ingestion and Moto-backed durable adapters are verified at [`8dccb85`](https://github.com/muhammadali182-q/herbie/commit/8dccb85cfad5788f1ac352a2ea3ffc75c19c62bf); broker transport is not claimed |
+| 3. MQTT system integration | In progress | Authenticated endpoint, durable queues, worker ACK policy, MQTT simulator, local-service tests | One duplicate-safe event travels MQTT to DynamoDB and S3; ACL, redelivery, and DLQ tests pass |
+| 4. Safe multi-tenancy | Planned | Identity, tenant context, PostgreSQL RLS, configuration APIs | Cross-tenant negative matrix passes |
+| 5. Dashboard integration | Planned | OIDC-compatible authentication and tenant-scoped live workflows | Seeded tenant data renders without cross-tenant leakage |
+| 6. Sessions and allocation | Planned | State machine, outbox, commands, allocation algorithm | Session and allocation invariants pass |
+| 7. Metering and billing | Planned | Checkpoints, tariff snapshots, charges, usage invoices | Golden reconciliation is exact and repeatable |
+| 8. Cloud operations | Planned | Terraform profiles, monitoring, backup, rollback, teardown | Cost-controlled deploy and destroy are reproducible |
+| 9. Evidence and release | Planned | Load, isolation, failure, upgrade, security, EOL, economics, demo, report | Evidence links raw results to a fixed release and a non-author can run the demo |
 
 ## Parallel Workstreams
 

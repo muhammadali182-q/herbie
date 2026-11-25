@@ -48,7 +48,17 @@ chronology would corrupt latest state under delayed delivery.
 
 ## Validation
 
-Property and integration tests must cover concurrent duplicates, conflicting
-message and sequence IDs, clock rollback, future skew, reordered boots,
-multiple connectors, archive failure, retry after object success, and adapter
-conformance against DynamoDB Local.
+Commit
+[`8dccb85`](https://github.com/muhammadali182-q/herbie/commit/8dccb85cfad5788f1ac352a2ea3ffc75c19c62bf)
+implements the decision. Unit and Moto-backed adapter tests cover concurrent
+duplicates in the in-memory repository, conflicting message and sequence IDs,
+clock rollback, future skew, reordered boots, multiple connectors, archive
+failure, immutable object retries, transaction composition, and bootstrap
+validation. Hosted run
+[`45566373644`](https://github.com/muhammadali182-q/herbie/actions/runs/45566373644)
+passed all quality jobs.
+
+This evidence verifies the application and adapter behavior against Moto. It
+does not verify RabbitMQ redelivery, DynamoDB Local concurrency, MinIO
+compatibility, AWS behavior, multiple archive schedulers, or global exactly-once
+archive membership. Those boundaries remain explicit follow-up work.
