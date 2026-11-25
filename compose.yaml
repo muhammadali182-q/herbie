@@ -1,0 +1,129 @@
+name: herbie
+
+services:
+  postgres:
+    image: postgres:16.6-alpine@sha256:1d04b9ba1d4996401f2552b51beda8187f175c0645c091e4781134fc9c9a3eef
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-herbie}
+      POSTGRES_USER: ${POSTGRES_USER:-herbie}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local_only}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4.1.4-management-alpine@sha256:5cbd7145b0306399ad68422c3350b6cbd1bb95704b39f5896480e5b6d4238a04
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-herbie}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-local_only}
+    ports:
+      - "127.0.0.1:1883:1883"
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+      - "127.0.0.1:15692:15692"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+      - ./deploy/rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./deploy/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  dynamodb:
+    image: amazon/dynamodb-local:2.6.1@sha256:1856c05cc66a0e49dc1099e483ad2851477eeebe2135250ac11a1d1227db54b1
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ./data"
+    ports:
+      - "127.0.0.1:8001:8000"
+    volumes:
+      - dynamodb-data:/home/dynamodblocal/data
+    working_dir: /home/dynamodblocal
+    user: root
+    restart: unless-stopped
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-herbie}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-local_only_change_me}
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
+    volumes:
+      - minio-data:/data
+    restart: unless-stopped
+
+  api:
+    profiles: ["app"]
+    build:
+      context: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HERBIE_DATABASE_URL: ${HERBIE_DATABASE_URL:-postgresql+asyncpg://herbie:local_only@postgres:5432/herbie}
+      HERBIE_AMQP_URL: ${HERBIE_AMQP_URL:-amqp://herbie:local_only@rabbitmq:5672/%2F}
+      HERBIE_DYNAMODB_ENDPOINT: ${HERBIE_DYNAMODB_ENDPOINT:-http://dynamodb:8000}
+      HERBIE_S3_ENDPOINT: ${HERBIE_S3_ENDPOINT:-http://minio:9000}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-herbie}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-local_only_change_me}
+    ports:
+      - "127.0.0.1:8080:${HERBIE_API_PORT:-8000}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    profiles: ["app"]
+    build:
+      context: .
+    command: ["python", "-m", "herbie.worker"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      HERBIE_DATABASE_URL: ${HERBIE_DATABASE_URL:-postgresql+asyncpg://herbie:local_only@postgres:5432/herbie}
+      HERBIE_AMQP_URL: ${HERBIE_AMQP_URL:-amqp://herbie:local_only@rabbitmq:5672/%2F}
+      HERBIE_DYNAMODB_ENDPOINT: ${HERBIE_DYNAMODB_ENDPOINT:-http://dynamodb:8000}
+      HERBIE_S3_ENDPOINT: ${HERBIE_S3_ENDPOINT:-http://minio:9000}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-herbie}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-local_only_change_me}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+
+  web:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    ports:
+      - "127.0.0.1:5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  rabbitmq-data:
+  dynamodb-data:
+  minio-data:
