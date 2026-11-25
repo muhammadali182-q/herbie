@@ -737,3 +737,18 @@ formatting, and strict mypy over 37 source files pass. The real-service result
 is pending the hosted `MQTT system` job and is not yet recorded as passing.
 ADR-0002 remains `Proposed` until that result and the remaining TLS/control-path
 criteria are evaluated.
+
+### First Hosted Attempt
+
+GitHub Actions run
+[`45585700340`](https://github.com/muhammadali182-q/herbie/actions/runs/45585700340)
+passed backend, frontend, documentation, container-build, and secret-scan jobs.
+The MQTT system job stopped before service startup because Quay returned HTTP
+401 for the previously configured MinIO image. No system test executed, so the
+run provides no MQTT or storage-behavior evidence.
+
+The local emulator was changed to the publicly pullable multi-architecture
+`bitnamilegacy/minio:2025.7.23-debian-12-r5` manifest pinned at digest
+`sha256:6dabb4a2088c9a79908de3bc05f4586c23ad2182c8908e7e3acbf61c1467fb20`.
+This legacy mirror is acceptable for bounded S3-compatibility tests but is not a
+recommended production image and receives no availability or support claim.
